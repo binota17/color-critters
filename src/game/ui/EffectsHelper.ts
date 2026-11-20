@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { TEXTURE_KEYS } from '../config/constants';
 
 /**
  * Lightweight pixel-art visual effects (dust puffs, ability bursts, floating text).
@@ -13,14 +14,18 @@ export class EffectsHelper {
   spawnDustPuff(x: number, y: number, count = 4): void {
     for (let i = 0; i < count; i += 1) {
       const offsetX = Phaser.Math.Between(-8, 8);
-      const puff = this.scene.add.rectangle(x + offsetX, y, 4, 4, 0xf1f5f9, 0.85).setDepth(3);
+      const puff = this.scene.add
+        .image(x + offsetX, y, TEXTURE_KEYS.FX_PARTICLES, 0)
+        .setScale(0.65)
+        .setAlpha(0.9)
+        .setDepth(3);
 
       this.scene.tweens.add({
         targets: puff,
         x: puff.x + offsetX * 1.6,
         y: puff.y - Phaser.Math.Between(6, 14),
         alpha: 0,
-        scale: 0.4,
+        scale: 0.25,
         duration: 240,
         ease: 'Cubic.easeOut',
         onComplete: () => puff.destroy(),
@@ -29,31 +34,45 @@ export class EffectsHelper {
   }
 
   spawnSwitchRing(x: number, y: number, color: number): void {
-    const ring = this.scene.add.circle(x, y, 10).setStrokeStyle(2, color, 0.9).setDepth(4);
+    const ring = this.scene.add
+      .image(x, y, TEXTURE_KEYS.FX_PARTICLES, 3)
+      .setTint(color)
+      .setScale(1.2)
+      .setAlpha(0.95)
+      .setDepth(4);
     this.scene.tweens.add({
       targets: ring,
-      scale: 1.85,
+      scale: 2.4,
       alpha: 0,
-      duration: 180,
+      duration: 190,
       ease: 'Cubic.easeOut',
       onComplete: () => ring.destroy(),
     });
   }
 
   spawnAbilityBurst(x: number, y: number, color: number): void {
-    const pulse = this.scene.add.circle(x, y, 14).setStrokeStyle(3, color).setDepth(4);
+    const pulse = this.scene.add
+      .image(x, y, TEXTURE_KEYS.FX_PARTICLES, 3)
+      .setTint(color)
+      .setScale(1.4)
+      .setDepth(4);
     this.scene.tweens.add({
       targets: pulse,
-      scale: 2.6,
+      scale: 3.4,
       alpha: 0,
       duration: 280,
       ease: 'Cubic.easeOut',
       onComplete: () => pulse.destroy(),
     });
 
+    const sparkFrame = color === 0x22c55e || color === 0x4ade80 ? 1 : 2;
     for (let i = 0; i < 6; i += 1) {
       const angle = (Math.PI * 2 * i) / 6;
-      const spark = this.scene.add.rectangle(x, y, 4, 4, color).setDepth(4);
+      const spark = this.scene.add
+        .image(x, y, TEXTURE_KEYS.FX_PARTICLES, sparkFrame)
+        .setTint(color)
+        .setScale(0.75)
+        .setDepth(4);
       this.scene.tweens.add({
         targets: spark,
         x: x + Math.cos(angle) * 26,
@@ -67,17 +86,20 @@ export class EffectsHelper {
   }
 
   spawnFloatingText(x: number, y: number, message: string, success: boolean): void {
-    const feedback = this.scene.add
-      .text(x, y, message, {
+    const label = this.scene.add
+      .text(0, 0, message, {
         fontFamily: 'monospace',
-        fontSize: '12px',
+        fontSize: '11px',
         fontStyle: 'bold',
         color: success ? '#14532d' : '#991b1b',
-        backgroundColor: '#ffffff',
-        padding: { x: 5, y: 2 },
       })
-      .setOrigin(0.5)
-      .setDepth(6);
+      .setOrigin(0.5);
+
+    const bg = this.scene.add
+      .nineslice(0, 0, TEXTURE_KEYS.UI_TOOLTIP, undefined, label.width + 16, label.height + 10, 6, 6, 6, 6)
+      .setTint(success ? 0xdcfce7 : 0xfee2e2);
+
+    const feedback = this.scene.add.container(x, y, [bg, label]).setDepth(6);
 
     this.scene.tweens.add({
       targets: feedback,

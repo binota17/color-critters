@@ -23,16 +23,30 @@ export class TerrainPreviewScene extends Phaser.Scene {
   create(): void {
     this.cameras.main.setBackgroundColor(COLORS.SKY);
 
-    this.add
-      .text(16, 12, 'ENV-ART-002: Core Terrain Tileset Preview (32x32 Native Scale)', {
+    const headerText = this.add
+      .text(24, 16, 'ENV-ART-002: Core Terrain Tileset Preview (32x32 Native Scale)', {
         fontFamily: 'monospace',
         fontSize: '14px',
         fontStyle: 'bold',
-        color: '#0f172a',
-        backgroundColor: '#e0f2fe',
-        padding: { x: 8, y: 4 },
+        color: '#3e273b',
       })
       .setDepth(10);
+
+    this.add
+      .nineslice(
+        16,
+        12,
+        TEXTURE_KEYS.UI_PANEL,
+        undefined,
+        headerText.width + 16,
+        headerText.height + 10,
+        8,
+        8,
+        8,
+        8,
+      )
+      .setOrigin(0, 0)
+      .setDepth(9);
 
     // 1. Floating Grass Platform (1x4) & Stone Platform (1x4) & 1x1 Single Blocks
     this.placeTile(2, 3, 5);

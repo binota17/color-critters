@@ -18,9 +18,8 @@ export class ResonanceConnection {
   private readonly startY: number;
   private readonly endX: number;
   private readonly endY: number;
-  private readonly vineSegments: Phaser.GameObjects.Image[] = [];
-  private readonly energyPacket: Phaser.GameObjects.Arc;
-  private readonly glowLine: Phaser.GameObjects.Graphics;
+  private readonly vineSegments: Phaser.GameObjects.Sprite[] = [];
+  private readonly energyPacket: Phaser.GameObjects.Image;
   private connected = false;
   private transmitting = false;
   private powered = false;
@@ -32,9 +31,7 @@ export class ResonanceConnection {
     this.endX = options.endX;
     this.endY = options.endY;
 
-    this.glowLine = scene.add.graphics().setDepth(0).setVisible(false);
-
-    // Pre-create visual vine segments along the path (no physics bodies)
+    // Pre-create visual resonance vine segments along the path (no physics bodies)
     const angle = Math.atan2(this.endY - this.startY, this.endX - this.startX);
     const distance = Math.hypot(this.endX - this.startX, this.endY - this.startY);
     const segmentCount = Math.max(2, Math.floor(distance / TILE_SIZE));
@@ -43,8 +40,7 @@ export class ResonanceConnection {
       const sx = Phaser.Math.Linear(this.startX, this.endX, t);
       const sy = Phaser.Math.Linear(this.startY, this.endY, t);
       const seg = scene.add
-        .image(sx, sy, TEXTURE_KEYS.VINE_TILE)
-        .setDisplaySize(TILE_SIZE, 10)
+        .sprite(sx, sy, TEXTURE_KEYS.RESONANCE_VINE, 0)
         .setRotation(angle)
         .setDepth(0)
         .setVisible(false);
@@ -52,8 +48,7 @@ export class ResonanceConnection {
     }
 
     this.energyPacket = scene.add
-      .circle(this.startX, this.startY, 7, 0x43defc, 1)
-      .setStrokeStyle(2, 0xfacc15)
+      .image(this.startX, this.startY, TEXTURE_KEYS.RESONANCE_ORB)
       .setDepth(2)
       .setVisible(false);
   }
@@ -82,9 +77,9 @@ export class ResonanceConnection {
 
     this.vineSegments.forEach((seg, index) => {
       this.scene.tweens.killTweensOf(seg);
+      seg.setFrame(0);
       seg.setVisible(true);
       seg.setScale(0.2, 1);
-      seg.setTint(0xffffff);
       this.scene.tweens.add({
         targets: seg,
         scaleX: 1,
@@ -124,13 +119,8 @@ export class ResonanceConnection {
   }
 
   private showPoweredGlow(): void {
-    this.glowLine.clear();
-    this.glowLine.lineStyle(4, 0xfacc15, 0.55);
-    this.glowLine.lineBetween(this.startX, this.startY, this.endX, this.endY);
-    this.glowLine.setVisible(true);
-
     for (const seg of this.vineSegments) {
-      seg.setTint(0xbef264);
+      seg.setFrame(1);
     }
   }
 
@@ -142,11 +132,9 @@ export class ResonanceConnection {
     this.scene.tweens.killTweensOf(this.energyPacket);
     this.energyPacket.setVisible(false).setPosition(this.startX, this.startY);
 
-    this.glowLine.clear().setVisible(false);
-
     for (const seg of this.vineSegments) {
       this.scene.tweens.killTweensOf(seg);
-      seg.clearTint();
+      seg.setFrame(0);
       seg.setScale(1, 1);
       seg.setVisible(false);
     }

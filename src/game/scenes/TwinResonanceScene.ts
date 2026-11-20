@@ -44,7 +44,9 @@ export class TwinResonanceScene extends Phaser.Scene {
   private resonanceRoot!: ResonanceRoot;
   private resonanceConnection!: ResonanceConnection;
   private resonanceRelay!: ResonanceRelay;
-  private activeIndicator!: Phaser.GameObjects.Triangle;
+  private activeIndicator!: Phaser.GameObjects.Image;
+  private promptContainer!: Phaser.GameObjects.Container;
+  private promptBg!: Phaser.GameObjects.NineSlice;
   private promptText!: Phaser.GameObjects.Text;
   private runDustTimerMs = 0;
   private groundTopY = 0;
@@ -292,25 +294,33 @@ export class TwinResonanceScene extends Phaser.Scene {
   }
 
   private createHints(rootX: number, relayX: number, gateX: number): void {
-    const style: Phaser.Types.GameObjects.Text.TextStyle = {
-      fontFamily: 'monospace',
-      fontSize: '11px',
-      fontStyle: 'bold',
-      color: '#1e293b',
-      backgroundColor: '#e0f2fe',
-      padding: { x: 5, y: 2 },
+    const placeHint = (x: number, y: number, text: string) => {
+      const label = this.add
+        .text(x, y, text, {
+          fontFamily: 'monospace',
+          fontSize: '11px',
+          fontStyle: 'bold',
+          color: '#3e273b',
+        })
+        .setOrigin(0.5)
+        .setDepth(2);
+      this.add
+        .nineslice(x, y, TEXTURE_KEYS.UI_PANEL, undefined, label.width + 14, label.height + 10, 6, 6, 6, 6)
+        .setAlpha(0.92)
+        .setDepth(1);
     };
-    this.add.text(rootX, this.groundTopY - 78, '1. MOSS: Connect Root [E]', style).setOrigin(0.5).setDepth(1);
-    this.add.text(relayX, this.groundTopY - 78, '2. ZIPPY: Power Relay [E]', style).setOrigin(0.5).setDepth(1);
-    this.add.text(gateX, this.groundTopY - 78, 'RESONANCE GATE', style).setOrigin(0.5).setDepth(1);
+
+    placeHint(rootX, this.groundTopY - 78, '1. MOSS: Connect Root [E]');
+    placeHint(relayX, this.groundTopY - 78, '2. ZIPPY: Power Relay [E]');
+    placeHint(gateX, this.groundTopY - 78, 'RESONANCE GATE');
   }
 
   private createHud(): void {
     this.hud = new GameplayHud(this, PROTOTYPE_TITLE);
 
     this.activeIndicator = this.add
-      .triangle(0, 0, 0, 0, 10, 0, 5, 7, 0xffffff)
-      .setStrokeStyle(2, 0x0f172a)
+      .image(0, 0, TEXTURE_KEYS.HUD_ICONS, 8)
+      .setTint(0x4ade80)
       .setDepth(3);
 
     this.promptText = this.add
@@ -318,11 +328,25 @@ export class TwinResonanceScene extends Phaser.Scene {
         fontFamily: 'monospace',
         fontSize: '12px',
         fontStyle: 'bold',
-        color: '#0f172a',
-        backgroundColor: '#fef9c3',
-        padding: { x: 6, y: 3 },
+        color: '#3e273b',
       })
-      .setOrigin(0.5)
+      .setOrigin(0.5);
+
+    this.promptBg = this.add.nineslice(
+      0,
+      0,
+      TEXTURE_KEYS.UI_TOOLTIP,
+      undefined,
+      80,
+      24,
+      6,
+      6,
+      6,
+      6,
+    );
+
+    this.promptContainer = this.add
+      .container(0, 0, [this.promptBg, this.promptText])
       .setDepth(4)
       .setVisible(false);
   }
@@ -331,16 +355,17 @@ export class TwinResonanceScene extends Phaser.Scene {
     const active = this.switchSystem.getActiveCritter();
     const inactive = this.switchSystem.getInactiveCritters()[0] ?? active;
 
-    this.activeIndicator.setPosition(active.x, active.y - 24);
-    this.activeIndicator.setFillStyle(active.id === CRITTER_IDS.MOSS ? 0x4ade80 : 0xfacc15);
+    this.activeIndicator
+      .setPosition(active.x, active.y - 24)
+      .setTint(active.id === CRITTER_IDS.MOSS ? 0x4ade80 : 0xfacc15);
 
     const nearby = this.abilitySystem.findNearestValidTarget(active);
     if (nearby && !this.puzzleSystem.isCompleted()) {
       this.promptText.setText(nearby.promptLabel);
-      this.promptText.setPosition(active.x, active.y - 42);
-      this.promptText.setVisible(true);
+      this.promptBg.setSize(this.promptText.width + 16, this.promptText.height + 10);
+      this.promptContainer.setPosition(active.x, active.y - 44).setVisible(true);
     } else {
-      this.promptText.setVisible(false);
+      this.promptContainer.setVisible(false);
     }
 
     const connected = this.resonanceRoot.isRootConnected();

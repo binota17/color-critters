@@ -25,7 +25,7 @@ export class ResonanceRoot implements InteractableObject {
 
   private readonly scene: Phaser.Scene;
   private readonly sprite: Phaser.GameObjects.Sprite;
-  private readonly statusRing: Phaser.GameObjects.Arc;
+  private readonly statusAura: Phaser.GameObjects.Image;
   private readonly connection: ResonanceConnection;
   private readonly conditionKey: string;
   private readonly puzzleSystem: PuzzleSystem;
@@ -39,12 +39,11 @@ export class ResonanceRoot implements InteractableObject {
     this.puzzleSystem = options.puzzleSystem;
 
     this.sprite = scene.add
-      .sprite(options.x, options.y, TEXTURE_KEYS.GROWTH_POINT, 0)
+      .sprite(options.x, options.y, TEXTURE_KEYS.RESONANCE_ROOT, 0)
       .setDepth(1);
 
-    this.statusRing = scene.add
-      .circle(options.x, options.y, 18)
-      .setStrokeStyle(2, 0x4ade80, 0.75)
+    this.statusAura = scene.add
+      .image(options.x, options.y, TEXTURE_KEYS.RESONANCE_AURA, 0)
       .setDepth(1)
       .setVisible(false);
   }
@@ -68,7 +67,7 @@ export class ResonanceRoot implements InteractableObject {
 
     this.isConnected = true;
     this.sprite.setFrame(1);
-    this.statusRing.setVisible(true);
+    this.statusAura.setVisible(true);
 
     this.scene.tweens.killTweensOf(this.sprite);
     this.sprite.setScale(1, 1);
@@ -89,7 +88,7 @@ export class ResonanceRoot implements InteractableObject {
     this.scene.tweens.killTweensOf(this.sprite);
     this.sprite.setScale(1, 1);
     this.sprite.setFrame(0);
-    this.statusRing.setVisible(false);
+    this.statusAura.setVisible(false);
     this.connection.reset();
   }
 }

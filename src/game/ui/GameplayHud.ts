@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { CRITTER_IDS, GAME_HEIGHT, GAME_WIDTH } from '../config/constants';
+import { CRITTER_IDS, GAME_HEIGHT, GAME_WIDTH, TEXTURE_KEYS } from '../config/constants';
 import { Critter } from '../entities/critters/Critter';
 
 export interface HudUpdateData {
@@ -12,97 +12,116 @@ export interface HudUpdateData {
 }
 
 /**
- * Clean, minimal pixel-art Gameplay HUD displaying active/inactive Critters,
+ * Pixel-art Gameplay HUD displaying active/inactive Critter portraits,
  * ability & cooldown status, puzzle locks, and completion overlay.
  */
 export class GameplayHud {
-  private readonly activeBadgeBg: Phaser.GameObjects.Rectangle;
+  private readonly activePortrait: Phaser.GameObjects.Image;
+  private readonly activeBadgeBg: Phaser.GameObjects.NineSlice;
   private readonly activeLabel: Phaser.GameObjects.Text;
+  private readonly abilityIcon: Phaser.GameObjects.Image;
   private readonly abilityLabel: Phaser.GameObjects.Text;
+  private readonly inactivePortrait: Phaser.GameObjects.Image;
   private readonly inactiveLabel: Phaser.GameObjects.Text;
-  private readonly plateDot: Phaser.GameObjects.Rectangle;
-  private readonly nodeDot: Phaser.GameObjects.Rectangle;
+  private readonly plateIcon: Phaser.GameObjects.Image;
+  private readonly nodeIcon: Phaser.GameObjects.Image;
+  private readonly doorIcon: Phaser.GameObjects.Image;
   private readonly doorLabel: Phaser.GameObjects.Text;
   private readonly completeOverlay: Phaser.GameObjects.Container;
 
   constructor(scene: Phaser.Scene, levelName: string) {
-    // Top-left compact HUD panel
+    // Top-left compact HUD panel (9-slice pixel frame)
     scene.add
-      .rectangle(12, 10, 440, 56, 0xf8fafc, 0.85)
+      .nineslice(12, 10, TEXTURE_KEYS.UI_PANEL, undefined, 456, 62, 8, 8, 8, 8)
       .setOrigin(0, 0)
-      .setStrokeStyle(2, 0x334155)
+      .setAlpha(0.95)
       .setDepth(8);
 
+    this.activePortrait = scene.add
+      .image(34, 41, TEXTURE_KEYS.CRITTER_PORTRAITS, 0)
+      .setDepth(9);
+
     this.activeBadgeBg = scene.add
-      .rectangle(20, 18, 72, 22, 0x22c55e)
+      .nineslice(56, 18, TEXTURE_KEYS.UI_BUTTON_GREEN, undefined, 68, 22, 6, 6, 6, 6)
       .setOrigin(0, 0)
-      .setStrokeStyle(2, 0x14532d)
       .setDepth(9);
 
     this.activeLabel = scene.add
-      .text(56, 29, 'MOSS', {
+      .text(90, 29, 'MOSS', {
         fontFamily: 'monospace',
-        fontSize: '13px',
+        fontSize: '12px',
         fontStyle: 'bold',
         color: '#ffffff',
       })
       .setOrigin(0.5)
       .setDepth(9);
 
+    this.abilityIcon = scene.add
+      .image(136, 29, TEXTURE_KEYS.HUD_ICONS, 0)
+      .setDepth(9);
+
     this.abilityLabel = scene.add
-      .text(102, 22, '', {
+      .text(148, 22, '', {
         fontFamily: 'monospace',
         fontSize: '13px',
         fontStyle: 'bold',
-        color: '#0f172a',
+        color: '#3e273b',
       })
       .setDepth(9);
 
+    this.inactivePortrait = scene.add
+      .image(64, 54, TEXTURE_KEYS.CRITTER_PORTRAITS, 1)
+      .setScale(0.5)
+      .setDepth(9);
+
     this.inactiveLabel = scene.add
-      .text(20, 46, '', {
+      .text(78, 47, '', {
         fontFamily: 'monospace',
         fontSize: '12px',
-        color: '#475569',
+        fontStyle: 'bold',
+        color: '#444d6b',
       })
       .setDepth(9);
 
     // Top-right compact Puzzle Status panel
     scene.add
-      .rectangle(GAME_WIDTH - 12, 10, 232, 34, 0xf8fafc, 0.85)
+      .nineslice(GAME_WIDTH - 12, 10, TEXTURE_KEYS.UI_PANEL, undefined, 286, 40, 8, 8, 8, 8)
       .setOrigin(1, 0)
-      .setStrokeStyle(2, 0x334155)
+      .setAlpha(0.95)
       .setDepth(8);
 
     scene.add
-      .text(GAME_WIDTH - 234, 20, 'Plate', {
+      .text(GAME_WIDTH - 284, 23, 'Plate', {
         fontFamily: 'monospace',
         fontSize: '12px',
         fontStyle: 'bold',
-        color: '#334155',
+        color: '#3e273b',
       })
       .setDepth(9);
 
-    this.plateDot = scene.add
-      .rectangle(GAME_WIDTH - 186, 27, 10, 10, 0xef4444)
-      .setStrokeStyle(1, 0x0f172a)
+    this.plateIcon = scene.add
+      .image(GAME_WIDTH - 236, 30, TEXTURE_KEYS.HUD_ICONS, 2)
       .setDepth(9);
 
     scene.add
-      .text(GAME_WIDTH - 170, 20, 'Node', {
+      .text(GAME_WIDTH - 216, 23, 'Node', {
         fontFamily: 'monospace',
         fontSize: '12px',
         fontStyle: 'bold',
-        color: '#334155',
+        color: '#3e273b',
       })
       .setDepth(9);
 
-    this.nodeDot = scene.add
-      .rectangle(GAME_WIDTH - 130, 27, 10, 10, 0xef4444)
-      .setStrokeStyle(1, 0x0f172a)
+    this.nodeIcon = scene.add
+      .image(GAME_WIDTH - 174, 30, TEXTURE_KEYS.HUD_ICONS, 4)
+      .setDepth(9);
+
+    this.doorIcon = scene.add
+      .image(GAME_WIDTH - 144, 30, TEXTURE_KEYS.HUD_ICONS, 6)
       .setDepth(9);
 
     this.doorLabel = scene.add
-      .text(GAME_WIDTH - 112, 20, 'Door: LOCKED', {
+      .text(GAME_WIDTH - 130, 23, 'Door: LOCKED', {
         fontFamily: 'monospace',
         fontSize: '12px',
         fontStyle: 'bold',
@@ -110,36 +129,62 @@ export class GameplayHud {
       })
       .setDepth(9);
 
-    // Subtle control strip at bottom-left with dark pill backdrop for legibility
-    scene.add
-      .text(
-        12,
-        GAME_HEIGHT - 24,
-        `${levelName}  |  A/D Move  •  Space Jump  •  Tab / 1-2 Switch  •  E Ability  •  R Reset`,
-        {
-          fontFamily: 'monospace',
-          fontSize: '12px',
-          color: '#f8fafc',
-          backgroundColor: 'rgba(15, 23, 42, 0.65)',
-          padding: { x: 8, y: 3 },
-        },
-      )
+    // Bottom control strip backed by pixel-art slate bar
+    const controlText = `${levelName}  |  A/D Move  •  Space Jump  •  Tab / 1-2 Switch  •  E Ability  •  R Reset`;
+    const controlLabel = scene.add
+      .text(22, GAME_HEIGHT - 19, controlText, {
+        fontFamily: 'monospace',
+        fontSize: '12px',
+        color: '#fbefd5',
+      })
+      .setOrigin(0, 0.5)
       .setDepth(9);
 
-    // Level Complete overlay
-    const box = scene.add
-      .rectangle(0, 0, 460, 120, 0xdcfce7, 0.96)
-      .setStrokeStyle(3, 0x14532d);
+    scene.add
+      .nineslice(
+        12,
+        GAME_HEIGHT - 19,
+        TEXTURE_KEYS.UI_BAR,
+        undefined,
+        controlLabel.width + 20,
+        24,
+        6,
+        6,
+        6,
+        6,
+      )
+      .setOrigin(0, 0.5)
+      .setAlpha(0.9)
+      .setDepth(8);
+
+    // Level Complete overlay (pixel-art frame + stars + portraits)
+    const box = scene.add.nineslice(
+      0,
+      0,
+      TEXTURE_KEYS.UI_PANEL_COMPLETE,
+      undefined,
+      470,
+      132,
+      8,
+      8,
+      8,
+      8,
+    );
+    const leftStar = scene.add.image(-190, -22, TEXTURE_KEYS.HUD_ICONS, 9).setScale(1.5);
+    const rightStar = scene.add.image(190, -22, TEXTURE_KEYS.HUD_ICONS, 9).setScale(1.5);
+    const mossBadge = scene.add.image(-168, 24, TEXTURE_KEYS.CRITTER_PORTRAITS, 0);
+    const zippyBadge = scene.add.image(168, 24, TEXTURE_KEYS.CRITTER_PORTRAITS, 1);
+
     const title = scene.add
-      .text(0, -18, `${levelName.toUpperCase()} COMPLETE!`, {
+      .text(0, -22, `${levelName.toUpperCase()} COMPLETE!`, {
         fontFamily: 'monospace',
-        fontSize: '22px',
+        fontSize: '19px',
         fontStyle: 'bold',
         color: '#14532d',
       })
       .setOrigin(0.5);
     const sub = scene.add
-      .text(0, 22, 'Press R to Replay', {
+      .text(0, 24, 'Press R to Replay', {
         fontFamily: 'monospace',
         fontSize: '15px',
         fontStyle: 'bold',
@@ -148,28 +193,42 @@ export class GameplayHud {
       .setOrigin(0.5);
 
     this.completeOverlay = scene.add
-      .container(GAME_WIDTH / 2, GAME_HEIGHT * 0.32, [box, title, sub])
+      .container(GAME_WIDTH / 2, GAME_HEIGHT * 0.32, [
+        box,
+        leftStar,
+        rightStar,
+        mossBadge,
+        zippyBadge,
+        title,
+        sub,
+      ])
       .setDepth(10)
       .setVisible(false);
   }
 
   update(data: HudUpdateData): void {
     const isMoss = data.active.id === CRITTER_IDS.MOSS;
-    this.activeBadgeBg.setFillStyle(isMoss ? 0x22c55e : 0xeab308);
-    this.activeBadgeBg.setStrokeStyle(2, isMoss ? 0x14532d : 0x854d0e);
+    this.activePortrait.setFrame(isMoss ? 0 : 1);
+    this.activeBadgeBg.setTexture(
+      isMoss ? TEXTURE_KEYS.UI_BUTTON_GREEN : TEXTURE_KEYS.UI_BUTTON_WOOD,
+    );
     this.activeLabel.setText(data.active.displayName);
+    this.abilityIcon.setFrame(isMoss ? 0 : 1);
 
     const statusText =
       data.cooldownMs > 0 ? `Cooldown ${(data.cooldownMs / 1000).toFixed(1)}s` : 'Ready [E]';
     this.abilityLabel.setText(`${data.abilityName}  •  ${statusText}`);
 
-    const switchKey = data.inactive.id === CRITTER_IDS.MOSS ? '1' : '2';
+    const isInactiveMoss = data.inactive.id === CRITTER_IDS.MOSS;
+    const switchKey = isInactiveMoss ? '1' : '2';
+    this.inactivePortrait.setFrame(isInactiveMoss ? 0 : 1);
     this.inactiveLabel.setText(`Standby: [${switchKey} / Tab] ${data.inactive.displayName}`);
 
-    this.plateDot.setFillStyle(data.plateOn ? 0x22c55e : 0xef4444);
-    this.nodeDot.setFillStyle(data.nodeOn ? 0xfacc15 : 0xef4444);
+    this.plateIcon.setFrame(data.plateOn ? 3 : 2);
+    this.nodeIcon.setFrame(data.nodeOn ? 5 : 4);
 
     const doorOpen = data.plateOn && data.nodeOn;
+    this.doorIcon.setFrame(doorOpen ? 7 : 6);
     this.doorLabel.setText(doorOpen ? 'Door: OPEN' : 'Door: LOCKED');
     this.doorLabel.setColor(doorOpen ? '#15803d' : '#991b1b');
   }

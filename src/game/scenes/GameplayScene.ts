@@ -55,8 +55,11 @@ export class GameplayScene extends Phaser.Scene {
   private critters!: Critter[];
   private controllers!: Record<CritterId, CritterController>;
   private clouds: Phaser.GameObjects.Image[] = [];
-  private wireGraphics!: Phaser.GameObjects.Graphics;
-  private activeIndicator!: Phaser.GameObjects.Triangle;
+  private plateConduits: Phaser.GameObjects.Image[] = [];
+  private nodeConduits: Phaser.GameObjects.Image[] = [];
+  private activeIndicator!: Phaser.GameObjects.Image;
+  private promptContainer!: Phaser.GameObjects.Container;
+  private promptBg!: Phaser.GameObjects.NineSlice;
   private promptText!: Phaser.GameObjects.Text;
   private runDustTimerMs = 0;
   private wasDoorOpen = false;
@@ -82,6 +85,7 @@ export class GameplayScene extends Phaser.Scene {
     this.effects = new EffectsHelper(this);
 
     this.createBackgroundDecor(this.groundTopY);
+    this.buildPuzzleConduits(this.groundTopY);
     const platforms = this.buildLevelTerrain(this.groundTopY);
 
     this.puzzleSystem = new PuzzleSystem(this.level.initialConditions);
@@ -386,7 +390,6 @@ export class GameplayScene extends Phaser.Scene {
       ];
 
       this.placeLevel1Props(groundTopY);
-      this.wireGraphics = this.add.graphics().setDepth(0);
       return;
     }
 
@@ -396,16 +399,11 @@ export class GameplayScene extends Phaser.Scene {
         this.add.image(x + 160, groundTopY - 64, TEXTURE_KEYS.BG_CANOPY).setDepth(-10);
       }
 
-      // Enchanted grove sunbeams & deep canopy silhouettes (L2, outline-free, subordinate)
-      const grove = this.add.graphics().setDepth(-15);
-      grove.fillStyle(0xfef9c3, 0.14);
-      grove.fillTriangle(160, 0, 290, 0, 390, groundTopY);
-      grove.fillTriangle(470, 0, 590, 0, 690, groundTopY);
-      grove.fillStyle(0x206247, 0.28);
-      grove.fillRect(245, 70, 34, groundTopY - 70);
-      grove.fillRect(515, 50, 40, groundTopY - 50);
-      grove.fillEllipse(262, 74, 128, 52);
-      grove.fillEllipse(535, 56, 148, 58);
+      // Enchanted grove L2 trees & pixel sunbeams (outline-free, subordinate)
+      this.add.image(255, groundTopY, TEXTURE_KEYS.BG_GROVE_TREE).setOrigin(0.5, 1).setAlpha(0.42).setDepth(-15);
+      this.add.image(535, groundTopY, TEXTURE_KEYS.BG_GROVE_TREE).setOrigin(0.5, 1).setScale(1.12).setAlpha(0.42).setDepth(-15);
+      this.add.image(250, 0, TEXTURE_KEYS.BG_SUNBEAM).setOrigin(0.5, 0).setScale(1.3, 1.5).setAlpha(0.16).setDepth(-14);
+      this.add.image(560, 0, TEXTURE_KEYS.BG_SUNBEAM).setOrigin(0.5, 0).setScale(1.3, 1.5).setAlpha(0.16).setDepth(-14);
 
       this.clouds = [
         this.createCloud(140, 110, 1),
@@ -414,7 +412,6 @@ export class GameplayScene extends Phaser.Scene {
       ];
 
       this.placeLevel3Props(groundTopY);
-      this.wireGraphics = this.add.graphics().setDepth(0);
       return;
     }
 
@@ -424,21 +421,20 @@ export class GameplayScene extends Phaser.Scene {
         this.add.image(x + 160, groundTopY - 64, TEXTURE_KEYS.BG_CANOPY).setDepth(-10);
       }
 
-      // Elevated canopy tree trunks & high leafy boughs (L2 depth, outline-free, subordinate)
-      const canopy = this.add.graphics().setDepth(-15);
-      const trunks = [
-        { x: 118, w: 36, topY: 96 },
-        { x: 324, w: 42, topY: 64 },
-        { x: 604, w: 38, topY: 82 },
-        { x: 856, w: 40, topY: 90 },
+      // Elevated canopy L2 pixel-art trees (outline-free, subordinate)
+      const trees = [
+        { x: 136, scale: 1.0 },
+        { x: 345, scale: 1.15 },
+        { x: 623, scale: 1.06 },
+        { x: 876, scale: 1.02 },
       ];
-      for (const t of trunks) {
-        canopy.fillStyle(0x25654b, 0.34);
-        canopy.fillRect(t.x, t.topY + 24, t.w, groundTopY - (t.topY + 24));
-        canopy.fillStyle(0x34947a, 0.34);
-        canopy.fillEllipse(t.x + t.w / 2, t.topY + 28, 136, 56);
-        canopy.fillStyle(0x45b69c, 0.28);
-        canopy.fillEllipse(t.x + t.w / 2 - 10, t.topY + 18, 108, 36);
+      for (const t of trees) {
+        this.add
+          .image(t.x, groundTopY, TEXTURE_KEYS.BG_CANOPY_TREE)
+          .setOrigin(0.5, 1)
+          .setScale(t.scale)
+          .setAlpha(0.45)
+          .setDepth(-15);
       }
 
       this.clouds = [
@@ -448,7 +444,6 @@ export class GameplayScene extends Phaser.Scene {
       ];
 
       this.placeLevel2Props(groundTopY);
-      this.wireGraphics = this.add.graphics().setDepth(0);
       return;
     }
 
@@ -470,8 +465,6 @@ export class GameplayScene extends Phaser.Scene {
       const x = col * TILE_SIZE + TILE_SIZE / 2;
       this.add.image(x, groundTopY - 8, TEXTURE_KEYS.GRASS_TUFT).setDepth(0);
     }
-
-    this.wireGraphics = this.add.graphics().setDepth(0);
   }
 
   private createCloud(x: number, y: number, scale: number): Phaser.GameObjects.Image {
@@ -566,21 +559,21 @@ export class GameplayScene extends Phaser.Scene {
 
   private createWorldHints(groundTopY: number): void {
     for (const hint of this.level.hints) {
-      this.add
-        .text(
-          hint.col * TILE_SIZE + TILE_SIZE / 2,
-          groundTopY - TILE_SIZE * hint.topOffsetTiles,
-          hint.text,
-          {
-            fontFamily: 'monospace',
-            fontSize: '11px',
-            fontStyle: 'bold',
-            color: '#1e293b',
-            backgroundColor: '#e0f2fe',
-            padding: { x: 5, y: 2 },
-          },
-        )
+      const hx = hint.col * TILE_SIZE + TILE_SIZE / 2;
+      const hy = groundTopY - TILE_SIZE * hint.topOffsetTiles;
+      const label = this.add
+        .text(hx, hy, hint.text, {
+          fontFamily: 'monospace',
+          fontSize: '11px',
+          fontStyle: 'bold',
+          color: '#3e273b',
+        })
         .setOrigin(0.5)
+        .setDepth(2);
+
+      this.add
+        .nineslice(hx, hy, TEXTURE_KEYS.UI_PANEL, undefined, label.width + 14, label.height + 10, 6, 6, 6, 6)
+        .setAlpha(0.92)
         .setDepth(1);
     }
   }
@@ -589,8 +582,8 @@ export class GameplayScene extends Phaser.Scene {
     this.hud = new GameplayHud(this, this.level.name);
 
     this.activeIndicator = this.add
-      .triangle(0, 0, 0, 0, 10, 0, 5, 7, 0xffffff)
-      .setStrokeStyle(2, 0x0f172a)
+      .image(0, 0, TEXTURE_KEYS.HUD_ICONS, 8)
+      .setTint(0x4ade80)
       .setDepth(3);
 
     this.promptText = this.add
@@ -598,11 +591,25 @@ export class GameplayScene extends Phaser.Scene {
         fontFamily: 'monospace',
         fontSize: '12px',
         fontStyle: 'bold',
-        color: '#0f172a',
-        backgroundColor: '#fef9c3',
-        padding: { x: 6, y: 3 },
+        color: '#3e273b',
       })
-      .setOrigin(0.5)
+      .setOrigin(0.5);
+
+    this.promptBg = this.add.nineslice(
+      0,
+      0,
+      TEXTURE_KEYS.UI_TOOLTIP,
+      undefined,
+      80,
+      24,
+      6,
+      6,
+      6,
+      6,
+    );
+
+    this.promptContainer = this.add
+      .container(0, 0, [this.promptBg, this.promptText])
       .setDepth(4)
       .setVisible(false);
   }
@@ -611,16 +618,18 @@ export class GameplayScene extends Phaser.Scene {
     const active = this.switchSystem.getActiveCritter();
     const inactive = this.switchSystem.getInactiveCritters()[0];
 
-    this.activeIndicator.setPosition(active.x, active.y - 25);
+    this.activeIndicator
+      .setPosition(active.x, active.y - 25)
+      .setTint(active.id === CRITTER_IDS.MOSS ? 0x4ade80 : 0xfacc15);
 
     const target = this.abilitySystem.findNearestValidTarget(active);
     if (target) {
       const pos = target.getPosition();
       this.promptText.setText(target.promptLabel);
-      this.promptText.setPosition(pos.x, pos.y - 30);
-      this.promptText.setVisible(true);
+      this.promptBg.setSize(this.promptText.width + 16, this.promptText.height + 10);
+      this.promptContainer.setPosition(pos.x, pos.y - 32).setVisible(true);
     } else {
-      this.promptText.setVisible(false);
+      this.promptContainer.setVisible(false);
     }
 
     const plateKey = this.level.pressurePlates[0]?.conditionKey ?? 'plate-1';
@@ -686,8 +695,9 @@ export class GameplayScene extends Phaser.Scene {
     }
   }
 
-  private drawPuzzleWires(plateOn: boolean, nodeOn: boolean): void {
-    this.wireGraphics.clear();
+  private buildPuzzleConduits(groundTopY: number): void {
+    this.plateConduits = [];
+    this.nodeConduits = [];
 
     const doorX = this.level.electricDoors[0]?.col * TILE_SIZE + TILE_SIZE / 2;
     const plate = this.level.pressurePlates[0];
@@ -698,19 +708,47 @@ export class GameplayScene extends Phaser.Scene {
       return;
     }
 
+    const addSegmentLine = (
+      list: Phaser.GameObjects.Image[],
+      x1: number,
+      y1: number,
+      x2: number,
+      y2: number,
+    ) => {
+      const dist = Math.hypot(x2 - x1, y2 - y1);
+      const count = Math.max(1, Math.round(dist / 16));
+      const angle = Math.atan2(y2 - y1, x2 - x1);
+      for (let i = 0; i < count; i += 1) {
+        const t = (i + 0.5) / count;
+        const img = this.add
+          .image(Phaser.Math.Linear(x1, x2, t), Phaser.Math.Linear(y1, y2, t), TEXTURE_KEYS.CONDUIT_WIRE, 0)
+          .setRotation(angle)
+          .setAlpha(0.5)
+          .setDepth(-1);
+        list.push(img);
+      }
+    };
+
     const plateX = plate.col * TILE_SIZE + TILE_SIZE / 2;
-    const plateY = this.groundTopY - TILE_SIZE * plate.topOffsetTiles;
-    this.wireGraphics.lineStyle(2, plateOn ? 0x22c55e : 0x475569, plateOn ? 0.85 : 0.35);
-    this.wireGraphics.lineBetween(plateX, plateY, doorX, plateY);
-    this.wireGraphics.lineBetween(doorX, plateY, doorX, this.groundTopY - TILE_SIZE * 4);
+    const plateY = groundTopY - TILE_SIZE * plate.topOffsetTiles;
+    addSegmentLine(this.plateConduits, plateX, plateY, doorX, plateY);
+    addSegmentLine(this.plateConduits, doorX, plateY, doorX, groundTopY - TILE_SIZE * 4);
 
     const nodeCol = node ? node.col : resPair!.relayCol;
     const nodeTopOffset = node ? (node.topOffsetTiles ?? 0) : (resPair!.relayTopOffsetTiles ?? 0);
     const nodeX = nodeCol * TILE_SIZE + TILE_SIZE / 2;
-    const nodeY = this.groundTopY - TILE_SIZE * nodeTopOffset - 8;
-    this.wireGraphics.lineStyle(2, nodeOn ? 0xfacc15 : 0x475569, nodeOn ? 0.9 : 0.35);
-    this.wireGraphics.lineBetween(nodeX, nodeY, doorX, nodeY);
-    this.wireGraphics.lineBetween(doorX, nodeY, doorX, this.groundTopY - TILE_SIZE * 2);
+    const nodeY = groundTopY - TILE_SIZE * nodeTopOffset - 8;
+    addSegmentLine(this.nodeConduits, nodeX, nodeY, doorX, nodeY);
+    addSegmentLine(this.nodeConduits, doorX, nodeY, doorX, groundTopY - TILE_SIZE * 2);
+  }
+
+  private drawPuzzleWires(plateOn: boolean, nodeOn: boolean): void {
+    for (const seg of this.plateConduits) {
+      seg.setFrame(plateOn ? 1 : 0).setAlpha(plateOn ? 0.95 : 0.45);
+    }
+    for (const seg of this.nodeConduits) {
+      seg.setFrame(nodeOn ? 2 : 0).setAlpha(nodeOn ? 0.95 : 0.45);
+    }
   }
 
   private buildLevelTerrain(groundTopY: number): Phaser.Physics.Arcade.StaticGroup {

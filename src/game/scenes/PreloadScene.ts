@@ -72,6 +72,55 @@ export class PreloadScene extends Phaser.Scene {
     });
     this.load.image(TEXTURE_KEYS.BG_HILLS, 'assets/environment/prototype/bg-hills.png');
     this.load.image(TEXTURE_KEYS.BG_CANOPY, 'assets/environment/prototype/bg-canopy.png');
+    this.load.image(TEXTURE_KEYS.BG_CANOPY_TREE, 'assets/environment/bg-canopy-tree.png');
+    this.load.image(TEXTURE_KEYS.BG_GROVE_TREE, 'assets/environment/bg-grove-tree.png');
+    this.load.image(TEXTURE_KEYS.BG_SUNBEAM, 'assets/environment/bg-sunbeam.png');
+
+    // Dedicated Twin Resonance & Conduit assets
+    this.load.spritesheet(TEXTURE_KEYS.RESONANCE_ROOT, 'assets/objects/resonance-root.png', {
+      frameWidth: TILE_SIZE,
+      frameHeight: TILE_SIZE,
+    });
+    this.load.spritesheet(TEXTURE_KEYS.RESONANCE_RELAY, 'assets/objects/resonance-relay.png', {
+      frameWidth: TILE_SIZE,
+      frameHeight: TILE_SIZE,
+    });
+    this.load.spritesheet(TEXTURE_KEYS.RESONANCE_VINE, 'assets/objects/resonance-vine.png', {
+      frameWidth: TILE_SIZE,
+      frameHeight: 16,
+    });
+    this.load.image(TEXTURE_KEYS.RESONANCE_ORB, 'assets/objects/resonance-orb.png');
+    this.load.spritesheet(TEXTURE_KEYS.RESONANCE_AURA, 'assets/objects/resonance-aura.png', {
+      frameWidth: 48,
+      frameHeight: 48,
+    });
+    this.load.spritesheet(TEXTURE_KEYS.CONDUIT_WIRE, 'assets/objects/conduit-wire.png', {
+      frameWidth: 16,
+      frameHeight: 16,
+    });
+
+    // Pixel-art UI panels, buttons, portraits, HUD icons & FX particles
+    this.load.image(TEXTURE_KEYS.UI_PANEL, 'assets/ui/ui-panel.png');
+    this.load.image(TEXTURE_KEYS.UI_PANEL_COMPLETE, 'assets/ui/ui-panel-complete.png');
+    this.load.image(TEXTURE_KEYS.UI_BAR, 'assets/ui/ui-bar.png');
+    this.load.image(TEXTURE_KEYS.UI_TOOLTIP, 'assets/ui/ui-tooltip.png');
+    this.load.image(TEXTURE_KEYS.UI_BUTTON_GREEN, 'assets/ui/ui-button-green.png');
+    this.load.image(TEXTURE_KEYS.UI_BUTTON_GREEN_HOVER, 'assets/ui/ui-button-green-hover.png');
+    this.load.image(TEXTURE_KEYS.UI_BUTTON_WOOD, 'assets/ui/ui-button-wood.png');
+    this.load.image(TEXTURE_KEYS.UI_BUTTON_WOOD_HOVER, 'assets/ui/ui-button-wood-hover.png');
+    this.load.image(TEXTURE_KEYS.TITLE_BANNER, 'assets/ui/title-banner.png');
+    this.load.spritesheet(TEXTURE_KEYS.CRITTER_PORTRAITS, 'assets/ui/critter-portraits.png', {
+      frameWidth: 32,
+      frameHeight: 32,
+    });
+    this.load.spritesheet(TEXTURE_KEYS.HUD_ICONS, 'assets/ui/hud-icons.png', {
+      frameWidth: 16,
+      frameHeight: 16,
+    });
+    this.load.spritesheet(TEXTURE_KEYS.FX_PARTICLES, 'assets/ui/fx-particles.png', {
+      frameWidth: 16,
+      frameHeight: 16,
+    });
   }
 
   create(): void {
