@@ -1,5 +1,7 @@
 import { defineConfig } from '@playwright/test';
 
+const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+
 export default defineConfig({
   testDir: './tests/e2e',
   workers: 1,
@@ -11,7 +13,7 @@ export default defineConfig({
     headless: true,
   },
   webServer: {
-    command: 'npm.cmd run dev -- --port 5173',
+    command: `${npmCmd} run dev -- --port 5173`,
     url: 'http://localhost:5173',
     reuseExistingServer: !process.env.CI,
     timeout: 20000,

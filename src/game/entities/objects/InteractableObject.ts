@@ -11,6 +11,7 @@ export interface InteractableObject {
 
   getPosition(): { x: number; y: number };
   canActivate(critterId: CritterId): boolean;
+  getBlockedReason?(critterId: CritterId): string | null;
   activate(): void;
   reset(): void;
 }

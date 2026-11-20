@@ -39,6 +39,14 @@ export class MainMenuScene extends Phaser.Scene {
       230,
       42,
     );
+    this.createLevelButton(
+      GAME_WIDTH / 2,
+      GAME_HEIGHT * 0.88,
+      'LEVEL 3: RESONANT GROVE',
+      'level-03',
+      250,
+      38,
+    );
 
     this.add
       .sprite(GAME_WIDTH / 2 - 170, GAME_HEIGHT * 0.62, TEXTURE_KEYS.MOSS_SHEET)

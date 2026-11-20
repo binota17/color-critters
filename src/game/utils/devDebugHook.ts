@@ -21,6 +21,14 @@ export interface DevGameState {
     doorOpen: boolean;
     completed: boolean;
   };
+  resonance?: {
+    rootConnected: boolean;
+    vineVisible: boolean;
+    energyTransmitting: boolean;
+    relayPowered: boolean;
+    gateUnlocked: boolean;
+    completed: boolean;
+  };
 }
 
 declare global {

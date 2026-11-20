@@ -5,6 +5,10 @@ import { BootScene } from '../scenes/BootScene';
 import { PreloadScene } from '../scenes/PreloadScene';
 import { MainMenuScene } from '../scenes/MainMenuScene';
 import { GameplayScene } from '../scenes/GameplayScene';
+import { EnvStylePrototypeScene } from '../scenes/EnvStylePrototypeScene';
+import { TerrainPreviewScene } from '../scenes/TerrainPreviewScene';
+import { PropsPlacementScene } from '../scenes/PropsPlacementScene';
+import { TwinResonanceScene } from '../scenes/TwinResonanceScene';
 
 export const gameConfig: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -26,5 +30,5 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
       debug: false,
     },
   },
-  scene: [BootScene, PreloadScene, MainMenuScene, GameplayScene],
+  scene: [BootScene, PreloadScene, MainMenuScene, GameplayScene, EnvStylePrototypeScene, TerrainPreviewScene, PropsPlacementScene, TwinResonanceScene],
 };

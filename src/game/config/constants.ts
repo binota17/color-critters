@@ -29,6 +29,14 @@ export const TEXTURE_KEYS = {
   EXIT_GATE: 'exit-gate',
   CLOUD: 'cloud',
   GRASS_TUFT: 'grass-tuft',
+  CORE_TERRAIN: 'core-terrain-sheet',
+  WOOD_PLATFORM: 'wood-platform-sheet',
+  PROPS_FOLIAGE: 'props-foliage',
+  PROPS_MUSHROOMS: 'props-mushrooms',
+  PROPS_ROCKS: 'props-rocks',
+  PROPS_FLOWERS: 'props-flowers',
+  BG_HILLS: 'bg-hills',
+  BG_CANOPY: 'bg-canopy',
 } as const;
 
 export const COLORS = {

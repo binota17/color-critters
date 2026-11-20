@@ -75,6 +75,20 @@ export class AudioManager {
     this.playTone(480, 720, 0.07, 'sine', 0.035, 0.055);
   }
 
+  playAbilityFail(): void {
+    if (!this.canPlay('ability-fail', 180)) return;
+    this.playTone(220, 165, 0.065, 'sine', 0.03, 0);
+  }
+
+  playPlateToggle(pressed: boolean): void {
+    if (!this.canPlay('plate', 120)) return;
+    if (pressed) {
+      this.playTone(320, 440, 0.045, 'triangle', 0.03, 0);
+    } else {
+      this.playTone(300, 220, 0.045, 'triangle', 0.022, 0);
+    }
+  }
+
   playDoorToggle(open: boolean): void {
     if (!this.canPlay('door', 150)) return;
     if (open) {

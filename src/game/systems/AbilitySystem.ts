@@ -110,6 +110,15 @@ export class AbilitySystem {
       };
     }
 
+    const blocked = this.findNearestBlockedTarget(critter);
+    if (blocked) {
+      return {
+        success: false,
+        message: blocked.reason,
+        effectColor: def.effectColor,
+      };
+    }
+
     const incompatible = this.findNearestIncompatibleTarget(critter);
     if (incompatible) {
       const requiredName = incompatible.requiredCritter.toUpperCase();
@@ -134,6 +143,26 @@ export class AbilitySystem {
     for (const obj of this.interactables) {
       obj.reset();
     }
+  }
+
+  private findNearestBlockedTarget(
+    critter: Critter,
+  ): { obj: InteractableObject; reason: string } | null {
+    for (const obj of this.interactables) {
+      if (obj.requiredCritter !== critter.id || !obj.getBlockedReason) {
+        continue;
+      }
+      const reason = obj.getBlockedReason(critter.id);
+      if (!reason) {
+        continue;
+      }
+      const pos = obj.getPosition();
+      const dist = Phaser.Math.Distance.Between(critter.x, critter.y, pos.x, pos.y);
+      if (dist <= obj.interactionRadius) {
+        return { obj, reason };
+      }
+    }
+    return null;
   }
 
   private findNearestIncompatibleTarget(critter: Critter): InteractableObject | null {

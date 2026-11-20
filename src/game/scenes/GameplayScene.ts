@@ -17,6 +17,9 @@ import { ExitGate } from '../entities/objects/ExitGate';
 import { GrowthPoint } from '../entities/objects/GrowthPoint';
 import { InteractableObject } from '../entities/objects/InteractableObject';
 import { PressurePlate } from '../entities/objects/PressurePlate';
+import { ResonanceConnection } from '../entities/objects/ResonanceConnection';
+import { ResonanceRelay } from '../entities/objects/ResonanceRelay';
+import { ResonanceRoot } from '../entities/objects/ResonanceRoot';
 import { AudioManager } from '../managers/AudioManager';
 import { AbilitySystem } from '../systems/AbilitySystem';
 import { CritterController } from '../systems/CritterController';
@@ -43,6 +46,11 @@ export class GameplayScene extends Phaser.Scene {
   private hud!: GameplayHud;
   private pressurePlates: PressurePlate[] = [];
   private electricDoors: ElectricDoor[] = [];
+  private resonancePairs: Array<{
+    root: ResonanceRoot;
+    connection: ResonanceConnection;
+    relay: ResonanceRelay;
+  }> = [];
   private exitGate!: ExitGate;
   private critters!: Critter[];
   private controllers!: Record<CritterId, CritterController>;
@@ -52,6 +60,7 @@ export class GameplayScene extends Phaser.Scene {
   private promptText!: Phaser.GameObjects.Text;
   private runDustTimerMs = 0;
   private wasDoorOpen = false;
+  private wasPlateOn = false;
   private groundTopY = 0;
 
   constructor() {
@@ -79,7 +88,9 @@ export class GameplayScene extends Phaser.Scene {
     const interactables: InteractableObject[] = [];
     this.pressurePlates = [];
     this.electricDoors = [];
+    this.resonancePairs = [];
     this.wasDoorOpen = false;
+    this.wasPlateOn = false;
 
     for (const gpDef of this.level.growthPoints) {
       const gpTopOffset = gpDef.topOffsetTiles ?? 0;
@@ -137,6 +148,46 @@ export class GameplayScene extends Phaser.Scene {
       );
     }
 
+    for (const pairDef of this.level.resonancePairs ?? []) {
+      const rootX = pairDef.rootCol * TILE_SIZE + TILE_SIZE / 2;
+      const rootY = this.groundTopY - TILE_SIZE * (pairDef.rootTopOffsetTiles ?? 0) - TILE_SIZE / 2;
+      const relayX = pairDef.relayCol * TILE_SIZE + TILE_SIZE / 2;
+      const relayY = this.groundTopY - TILE_SIZE * (pairDef.relayTopOffsetTiles ?? 0) - TILE_SIZE / 2;
+
+      const connection = new ResonanceConnection(this, {
+        startX: rootX,
+        startY: rootY - 6,
+        endX: relayX,
+        endY: relayY - 6,
+      });
+
+      const root = new ResonanceRoot(this, {
+        id: pairDef.rootId,
+        x: rootX,
+        y: rootY,
+        connection,
+        conditionKey: pairDef.connectedConditionKey,
+        puzzleSystem: this.puzzleSystem,
+      });
+
+      const relay = new ResonanceRelay(this, {
+        id: pairDef.relayId,
+        x: relayX,
+        y: relayY,
+        connection,
+        conditionKey: pairDef.poweredConditionKey,
+        puzzleSystem: this.puzzleSystem,
+        onPowered: () => {
+          this.audioManager.playElectricPulse();
+          this.effects.spawnSwitchRing(relayX, relayY, 0xfacc15);
+          this.updateVisualIndicators();
+        },
+      });
+
+      interactables.push(root, relay);
+      this.resonancePairs.push({ root, connection, relay });
+    }
+
     this.exitGate = new ExitGate(this, {
       x: this.level.exitGate.col * TILE_SIZE + TILE_SIZE / 2,
       bottomY: this.groundTopY - TILE_SIZE * (this.level.exitGate.topOffsetTiles ?? 0),
@@ -184,6 +235,8 @@ export class GameplayScene extends Phaser.Scene {
       for (const critter of this.critters) {
         critter.setVelocity(0, 0);
       }
+      const active = this.switchSystem.getActiveCritter();
+      this.effects.spawnAbilityBurst(active.x, active.y, 0x22c55e);
       this.hud.setCompleteVisible(true);
       this.audioManager.playComplete();
       this.updateVisualIndicators();
@@ -222,6 +275,9 @@ export class GameplayScene extends Phaser.Scene {
 
     if (switched) {
       this.audioManager.playSwitch();
+      const switchedCritter = this.switchSystem.getActiveCritter();
+      const ringColor = switchedCritter.id === CRITTER_IDS.MOSS ? 0x4ade80 : 0xfacc15;
+      this.effects.spawnSwitchRing(switchedCritter.x, switchedCritter.y, ringColor);
     }
 
     this.abilitySystem.update(delta);
@@ -237,6 +293,8 @@ export class GameplayScene extends Phaser.Scene {
         } else {
           this.audioManager.playElectricPulse();
         }
+      } else {
+        this.audioManager.playAbilityFail();
       }
       this.effects.spawnFloatingText(
         activeCritter.x,
@@ -276,10 +334,22 @@ export class GameplayScene extends Phaser.Scene {
       plate.update(this.critters);
     }
 
+    const plateOnNow = this.level.pressurePlates.some((p) =>
+      this.puzzleSystem.getCondition(p.conditionKey),
+    );
+    if (plateOnNow !== this.wasPlateOn) {
+      this.wasPlateOn = plateOnNow;
+      this.audioManager.playPlateToggle(plateOnNow);
+    }
+
     const doorOpenNow = this.electricDoors[0]?.getIsOpen() ?? false;
     if (doorOpenNow !== this.wasDoorOpen) {
       this.wasDoorOpen = doorOpenNow;
       this.audioManager.playDoorToggle(doorOpenNow);
+      if (doorOpenNow && this.level.electricDoors[0]) {
+        const doorX = this.level.electricDoors[0].col * TILE_SIZE + TILE_SIZE / 2;
+        this.effects.spawnSwitchRing(doorX, this.groundTopY - TILE_SIZE * 2, 0x38bdf8);
+      }
     }
 
     this.exitGate.update(this.critters);
@@ -296,23 +366,90 @@ export class GameplayScene extends Phaser.Scene {
     }
     this.puzzleSystem.reset();
     this.wasDoorOpen = false;
+    this.wasPlateOn = false;
     this.runDustTimerMs = 0;
     this.hud.setCompleteVisible(false);
     this.updateVisualIndicators();
   }
 
   private createBackgroundDecor(groundTopY: number): void {
+    if (this.level.id === 'level-01') {
+      for (let x = 0; x < GAME_WIDTH; x += 320) {
+        this.add.image(x + 160, groundTopY - 48, TEXTURE_KEYS.BG_HILLS).setDepth(-20);
+        this.add.image(x + 160, groundTopY - 64, TEXTURE_KEYS.BG_CANOPY).setDepth(-10);
+      }
+
+      this.clouds = [
+        this.createCloud(140, 110, 1),
+        this.createCloud(520, 92, 1.15),
+        this.createCloud(810, 128, 0.9),
+      ];
+
+      this.placeLevel1Props(groundTopY);
+      this.wireGraphics = this.add.graphics().setDepth(0);
+      return;
+    }
+
+    if (this.level.theme === 'grove') {
+      for (let x = 0; x < GAME_WIDTH; x += 320) {
+        this.add.image(x + 160, groundTopY - 48, TEXTURE_KEYS.BG_HILLS).setDepth(-20);
+        this.add.image(x + 160, groundTopY - 64, TEXTURE_KEYS.BG_CANOPY).setDepth(-10);
+      }
+
+      // Enchanted grove sunbeams & deep canopy silhouettes (L2, outline-free, subordinate)
+      const grove = this.add.graphics().setDepth(-15);
+      grove.fillStyle(0xfef9c3, 0.14);
+      grove.fillTriangle(160, 0, 290, 0, 390, groundTopY);
+      grove.fillTriangle(470, 0, 590, 0, 690, groundTopY);
+      grove.fillStyle(0x206247, 0.28);
+      grove.fillRect(245, 70, 34, groundTopY - 70);
+      grove.fillRect(515, 50, 40, groundTopY - 50);
+      grove.fillEllipse(262, 74, 128, 52);
+      grove.fillEllipse(535, 56, 148, 58);
+
+      this.clouds = [
+        this.createCloud(140, 110, 1),
+        this.createCloud(520, 92, 1.15),
+        this.createCloud(810, 128, 0.9),
+      ];
+
+      this.placeLevel3Props(groundTopY);
+      this.wireGraphics = this.add.graphics().setDepth(0);
+      return;
+    }
+
     if (this.level.theme === 'canopy') {
-      const canopy = this.add.graphics().setDepth(-1);
-      // Distant forest canopy trunks & foliage silhouettes
-      canopy.fillStyle(0x166534, 0.25);
-      canopy.fillRect(90, 80, 44, groundTopY - 80);
-      canopy.fillRect(360, 40, 56, GAME_HEIGHT - 40);
-      canopy.fillRect(680, 60, 48, GAME_HEIGHT - 60);
-      canopy.fillStyle(0x22c55e, 0.22);
-      canopy.fillRect(40, 50, 150, 56);
-      canopy.fillRect(310, 20, 160, 64);
-      canopy.fillRect(620, 35, 170, 58);
+      for (let x = 0; x < GAME_WIDTH; x += 320) {
+        this.add.image(x + 160, groundTopY - 48, TEXTURE_KEYS.BG_HILLS).setDepth(-20);
+        this.add.image(x + 160, groundTopY - 64, TEXTURE_KEYS.BG_CANOPY).setDepth(-10);
+      }
+
+      // Elevated canopy tree trunks & high leafy boughs (L2 depth, outline-free, subordinate)
+      const canopy = this.add.graphics().setDepth(-15);
+      const trunks = [
+        { x: 118, w: 36, topY: 96 },
+        { x: 324, w: 42, topY: 64 },
+        { x: 604, w: 38, topY: 82 },
+        { x: 856, w: 40, topY: 90 },
+      ];
+      for (const t of trunks) {
+        canopy.fillStyle(0x25654b, 0.34);
+        canopy.fillRect(t.x, t.topY + 24, t.w, groundTopY - (t.topY + 24));
+        canopy.fillStyle(0x34947a, 0.34);
+        canopy.fillEllipse(t.x + t.w / 2, t.topY + 28, 136, 56);
+        canopy.fillStyle(0x45b69c, 0.28);
+        canopy.fillEllipse(t.x + t.w / 2 - 10, t.topY + 18, 108, 36);
+      }
+
+      this.clouds = [
+        this.createCloud(140, 110, 1),
+        this.createCloud(520, 92, 1.15),
+        this.createCloud(810, 128, 0.9),
+      ];
+
+      this.placeLevel2Props(groundTopY);
+      this.wireGraphics = this.add.graphics().setDepth(0);
+      return;
     }
 
     this.clouds = [
@@ -338,7 +475,83 @@ export class GameplayScene extends Phaser.Scene {
   }
 
   private createCloud(x: number, y: number, scale: number): Phaser.GameObjects.Image {
-    return this.add.image(x, y, TEXTURE_KEYS.CLOUD).setScale(scale).setAlpha(0.85).setDepth(0);
+    return this.add.image(x, y, TEXTURE_KEYS.CLOUD).setScale(scale).setAlpha(0.85).setDepth(-30);
+  }
+
+  private placeLevel1Props(groundTopY: number): void {
+    const placeProp = (key: string, frame: number, col: number, surfaceY: number) => {
+      this.add.image(Math.round(col * TILE_SIZE), surfaceY, key, frame).setOrigin(0.5, 1).setDepth(0);
+    };
+
+    // Area 1 — Starting Clearing (kept clear of spawns at col 2, 4 and GrowthPoint at col 10)
+    placeProp(TEXTURE_KEYS.PROPS_FOLIAGE, 3, 0.75, groundTopY); // bush-sm
+    placeProp(TEXTURE_KEYS.PROPS_MUSHROOMS, 0, 1.4, groundTopY); // mushroom-sm
+    placeProp(TEXTURE_KEYS.PROPS_FLOWERS, 0, 3.5, groundTopY); // flower-daisy
+    placeProp(TEXTURE_KEYS.PROPS_FOLIAGE, 0, 5.3, groundTopY); // grass-tuft-sm
+    placeProp(TEXTURE_KEYS.PROPS_FOLIAGE, 1, 9.0, groundTopY); // grass-tuft-md
+
+    // Area 2 — Vine Crossing (kept clear of pit edges & PressurePlate at col 14)
+    placeProp(TEXTURE_KEYS.PROPS_ROCKS, 0, 16.0, groundTopY - TILE_SIZE * 4); // rock-sm on high plat
+    placeProp(TEXTURE_KEYS.PROPS_FOLIAGE, 0, 20.0, groundTopY - TILE_SIZE * 2); // grass-tuft-sm on step plat
+    placeProp(TEXTURE_KEYS.PROPS_ROCKS, 3, 18.0, groundTopY); // rock-mossy
+    placeProp(TEXTURE_KEYS.PROPS_FLOWERS, 1, 19.6, groundTopY); // flower-rose
+
+    // Area 3 — Power Gate (kept clear of ElectricNode col 21, ElectricDoor col 24, ExitGate col 27)
+    placeProp(TEXTURE_KEYS.PROPS_FLOWERS, 2, 22.8, groundTopY); // flower-twin-cyan
+    placeProp(TEXTURE_KEYS.PROPS_MUSHROOMS, 2, 25.7, groundTopY); // mushroom-lg
+    placeProp(TEXTURE_KEYS.PROPS_ROCKS, 2, 28.9, groundTopY); // rock-cluster
+    placeProp(TEXTURE_KEYS.PROPS_FOLIAGE, 3, 29.4, groundTopY); // bush-sm
+  }
+
+  private placeLevel2Props(groundTopY: number): void {
+    const placeProp = (key: string, frame: number, col: number, surfaceY: number) => {
+      this.add.image(Math.round(col * TILE_SIZE), surfaceY, key, frame).setOrigin(0.5, 1).setDepth(0);
+    };
+
+    // Area A — Canopy Approach (spawns at col 2, 4)
+    placeProp(TEXTURE_KEYS.PROPS_FOLIAGE, 4, 1.0, groundTopY); // bush-lg
+    placeProp(TEXTURE_KEYS.PROPS_MUSHROOMS, 3, 3.3, groundTopY); // mushroom-cluster
+    placeProp(TEXTURE_KEYS.PROPS_FLOWERS, 2, 6.4, groundTopY); // flower-twin-cyan
+
+    // Area B — Upper Canopy Relay (ElectricNode col 9, GrowthPoint col 11)
+    const highY = groundTopY - TILE_SIZE * 4;
+    placeProp(TEXTURE_KEYS.PROPS_ROCKS, 0, 8.3, highY); // rock-sm
+    placeProp(TEXTURE_KEYS.PROPS_FOLIAGE, 0, 10.3, highY); // grass-tuft-sm
+    placeProp(TEXTURE_KEYS.PROPS_FLOWERS, 1, 19.4, highY); // flower-rose on Center Canopy Deck
+
+    // Area B — Lower Canopy Island (PressurePlate col 17)
+    const midY = groundTopY - TILE_SIZE * 2;
+    placeProp(TEXTURE_KEYS.PROPS_FOLIAGE, 1, 18.6, midY); // grass-tuft-md
+    placeProp(TEXTURE_KEYS.PROPS_MUSHROOMS, 0, 19.9, midY); // mushroom-sm
+    placeProp(TEXTURE_KEYS.PROPS_ROCKS, 3, 21.1, midY); // rock-mossy
+
+    // Area C — Lower Right Ground & Exit Perch (ElectricDoor col 24, ExitGate col 28)
+    placeProp(TEXTURE_KEYS.PROPS_FOLIAGE, 3, 25.5, groundTopY); // bush-sm
+    placeProp(TEXTURE_KEYS.PROPS_FLOWERS, 3, 27.6, groundTopY); // flower-cluster
+    placeProp(TEXTURE_KEYS.PROPS_MUSHROOMS, 2, 29.2, groundTopY); // mushroom-lg
+    placeProp(TEXTURE_KEYS.PROPS_ROCKS, 0, 26.6, midY); // rock-sm on Exit Perch
+  }
+
+  private placeLevel3Props(groundTopY: number): void {
+    const placeProp = (key: string, frame: number, col: number, surfaceY: number) => {
+      this.add.image(Math.round(col * TILE_SIZE), surfaceY, key, frame).setOrigin(0.5, 1).setDepth(0);
+    };
+
+    // Section A — The Forgotten Root (spawns at col 1, 3; Root at col 8 topOffset 2)
+    placeProp(TEXTURE_KEYS.PROPS_FOLIAGE, 4, 0.6, groundTopY); // bush-lg
+    placeProp(TEXTURE_KEYS.PROPS_MUSHROOMS, 0, 2.3, groundTopY); // mushroom-sm
+    placeProp(TEXTURE_KEYS.PROPS_FLOWERS, 0, 4.3, groundTopY); // flower-daisy
+    placeProp(TEXTURE_KEYS.PROPS_FOLIAGE, 0, 7.3, groundTopY - TILE_SIZE * 2); // grass-tuft-sm on Root Terrace
+
+    // Section B — The Relay Passage (Relay at col 16 topOffset 4)
+    placeProp(TEXTURE_KEYS.PROPS_ROCKS, 0, 12.5, groundTopY - TILE_SIZE * 2); // rock-sm on step deck
+    placeProp(TEXTURE_KEYS.PROPS_FLOWERS, 2, 17.7, groundTopY - TILE_SIZE * 4); // flower-twin-cyan on Relay Deck
+
+    // Section C — The Resonant Exit (Plate at col 19, Door at col 23, ExitGate at col 27 topOffset 2)
+    placeProp(TEXTURE_KEYS.PROPS_MUSHROOMS, 3, 21.0, groundTopY); // mushroom-cluster
+    placeProp(TEXTURE_KEYS.PROPS_FLOWERS, 1, 22.1, groundTopY); // flower-rose
+    placeProp(TEXTURE_KEYS.PROPS_ROCKS, 3, 25.6, groundTopY - TILE_SIZE * 2); // rock-mossy on Exit Sanctum
+    placeProp(TEXTURE_KEYS.PROPS_FOLIAGE, 3, 29.0, groundTopY - TILE_SIZE * 2); // bush-sm
   }
 
   private updateClouds(deltaMs: number): void {
@@ -411,7 +624,10 @@ export class GameplayScene extends Phaser.Scene {
     }
 
     const plateKey = this.level.pressurePlates[0]?.conditionKey ?? 'plate-1';
-    const nodeKey = this.level.electricNodes[0]?.conditionKey ?? 'node-1';
+    const nodeKey =
+      this.level.electricNodes[0]?.conditionKey ??
+      this.level.resonancePairs?.[0]?.poweredConditionKey ??
+      'node-1';
     const vineKey = this.level.growthPoints[0]?.conditionKey ?? 'vine-1';
 
     const plateOn = this.puzzleSystem.getCondition(plateKey);
@@ -432,6 +648,8 @@ export class GameplayScene extends Phaser.Scene {
     const moss = this.critters.find((c) => c.id === CRITTER_IDS.MOSS);
     const zippy = this.critters.find((c) => c.id === CRITTER_IDS.ZIPPY);
     if (moss && zippy) {
+      const pair = this.resonancePairs[0];
+      const powered = pair ? pair.relay.isRelayPowered() : false;
       publishDevGameState({
         scene: SCENE_KEYS.GAMEPLAY,
         activeCritter: active.id,
@@ -454,6 +672,16 @@ export class GameplayScene extends Phaser.Scene {
           doorOpen: plateOn && nodeOn,
           completed: this.puzzleSystem.isCompleted(),
         },
+        resonance: pair
+          ? {
+              rootConnected: pair.root.isRootConnected(),
+              vineVisible: pair.connection.isVisible(),
+              energyTransmitting: pair.connection.isTransmitting(),
+              relayPowered: powered,
+              gateUnlocked: plateOn && powered,
+              completed: this.puzzleSystem.isCompleted(),
+            }
+          : undefined,
       });
     }
   }
@@ -464,8 +692,9 @@ export class GameplayScene extends Phaser.Scene {
     const doorX = this.level.electricDoors[0]?.col * TILE_SIZE + TILE_SIZE / 2;
     const plate = this.level.pressurePlates[0];
     const node = this.level.electricNodes[0];
+    const resPair = this.level.resonancePairs?.[0];
 
-    if (!doorX || !plate || !node) {
+    if (!doorX || !plate || (!node && !resPair)) {
       return;
     }
 
@@ -475,8 +704,10 @@ export class GameplayScene extends Phaser.Scene {
     this.wireGraphics.lineBetween(plateX, plateY, doorX, plateY);
     this.wireGraphics.lineBetween(doorX, plateY, doorX, this.groundTopY - TILE_SIZE * 4);
 
-    const nodeX = node.col * TILE_SIZE + TILE_SIZE / 2;
-    const nodeY = this.groundTopY - TILE_SIZE * (node.topOffsetTiles ?? 0) - 8;
+    const nodeCol = node ? node.col : resPair!.relayCol;
+    const nodeTopOffset = node ? (node.topOffsetTiles ?? 0) : (resPair!.relayTopOffsetTiles ?? 0);
+    const nodeX = nodeCol * TILE_SIZE + TILE_SIZE / 2;
+    const nodeY = this.groundTopY - TILE_SIZE * nodeTopOffset - 8;
     this.wireGraphics.lineStyle(2, nodeOn ? 0xfacc15 : 0x475569, nodeOn ? 0.9 : 0.35);
     this.wireGraphics.lineBetween(nodeX, nodeY, doorX, nodeY);
     this.wireGraphics.lineBetween(doorX, nodeY, doorX, this.groundTopY - TILE_SIZE * 2);
@@ -485,6 +716,9 @@ export class GameplayScene extends Phaser.Scene {
   private buildLevelTerrain(groundTopY: number): Phaser.Physics.Arcade.StaticGroup {
     const platforms = this.physics.add.staticGroup();
     const totalColumns = Math.ceil(GAME_WIDTH / TILE_SIZE);
+    const useLevel1Art = this.level.id === 'level-01';
+    const useLevel2Art = this.level.id === 'level-02';
+    const useLevel3Art = this.level.id === 'level-03';
 
     for (let col = 0; col < totalColumns; col += 1) {
       const inPit = this.level.pitSpans.some(
@@ -496,7 +730,18 @@ export class GameplayScene extends Phaser.Scene {
 
       const x = col * TILE_SIZE + TILE_SIZE / 2;
       for (let row = 0; row < this.level.groundThicknessTiles; row += 1) {
-        platforms.create(x, groundTopY + TILE_SIZE * (row + 0.5), TEXTURE_KEYS.GROUND_TILE);
+        if (useLevel1Art) {
+          const frame = this.getLevel1GroundFrame(col, row);
+          platforms.create(x, groundTopY + TILE_SIZE * (row + 0.5), TEXTURE_KEYS.CORE_TERRAIN, frame);
+        } else if (useLevel2Art) {
+          const frame = this.getLevel2GroundFrame(col, row);
+          platforms.create(x, groundTopY + TILE_SIZE * (row + 0.5), TEXTURE_KEYS.CORE_TERRAIN, frame);
+        } else if (useLevel3Art) {
+          const frame = this.getLevel3GroundFrame(col, row);
+          platforms.create(x, groundTopY + TILE_SIZE * (row + 0.5), TEXTURE_KEYS.CORE_TERRAIN, frame);
+        } else {
+          platforms.create(x, groundTopY + TILE_SIZE * (row + 0.5), TEXTURE_KEYS.GROUND_TILE);
+        }
       }
     }
 
@@ -504,11 +749,144 @@ export class GameplayScene extends Phaser.Scene {
       const y = groundTopY - TILE_SIZE * plat.topOffsetTiles + TILE_SIZE / 2;
       for (let col = plat.startCol; col <= plat.endCol; col += 1) {
         const x = col * TILE_SIZE + TILE_SIZE / 2;
-        platforms.create(x, y, TEXTURE_KEYS.PLATFORM_TILE);
+        if (useLevel1Art) {
+          if (plat.topOffsetTiles === 1) {
+            const frame = col === plat.startCol ? 0 : col === plat.endCol ? 2 : 1;
+            platforms.create(x, y, TEXTURE_KEYS.CORE_TERRAIN, frame);
+          } else {
+            const frame = col === plat.startCol ? 0 : col === plat.endCol ? 2 : 1;
+            platforms.create(x, y, TEXTURE_KEYS.WOOD_PLATFORM, frame);
+          }
+        } else if (useLevel2Art) {
+          const { key, frame } = this.getLevel2PlatformTile(plat.startCol, plat.endCol, plat.topOffsetTiles, col);
+          platforms.create(x, y, key, frame);
+        } else if (useLevel3Art) {
+          const { key, frame } = this.getLevel3PlatformTile(plat.startCol, plat.endCol, plat.topOffsetTiles, col);
+          platforms.create(x, y, key, frame);
+        } else {
+          platforms.create(x, y, TEXTURE_KEYS.PLATFORM_TILE);
+        }
       }
     }
 
     platforms.refresh();
     return platforms;
+  }
+
+  private getLevel2GroundFrame(col: number, row: number): number {
+    // Area A: Left Canopy Ground (cols 0..7)
+    if (col <= 7) {
+      if (row === 0) {
+        if (col === 7) return 2; // grass-top-right
+        return col % 3 === 1 ? 3 : 1;
+      }
+      if (col === 7) return 15; // dirt-right
+      return 8 + (col % 3);
+    }
+
+    // Area C: Right Mossy Stone Foundation (cols 23..29)
+    if (row === 0) {
+      if (col === 23) return 24; // stone-top-left (with moss)
+      if (col <= 25) return 39; // grass-on-stone-mid
+      return 25; // stone-top-mid
+    }
+    if (col === 23) return 27; // stone-left
+    return col % 2 === 0 ? 33 : 28; // stone-mid-moss / stone-mid
+  }
+
+  private getLevel2PlatformTile(
+    startCol: number,
+    endCol: number,
+    topOffsetTiles: number,
+    col: number,
+  ): { key: string; frame: number } {
+    const isStart = col === startCol;
+    const isEnd = col === endCol;
+
+    // Area C Elevated Exit Perch (cols 26..29): Stone Platform
+    if (startCol === 26) {
+      return {
+        key: TEXTURE_KEYS.CORE_TERRAIN,
+        frame: isStart ? 36 : isEnd ? 38 : 37,
+      };
+    }
+
+    // Area A Canopy Entry (cols 5..6) & Area B Center Deck (cols 18..19): Wooden Platforms
+    if (startCol === 5 || (startCol === 18 && topOffsetTiles === 4)) {
+      return {
+        key: TEXTURE_KEYS.WOOD_PLATFORM,
+        frame: isStart ? 0 : isEnd ? 2 : 1,
+      };
+    }
+
+    // Area B Upper Relay (cols 8..11) & Lower Canopy Island (cols 16..21): Mossy Grass Platforms
+    return {
+      key: TEXTURE_KEYS.CORE_TERRAIN,
+      frame: isStart ? 5 : isEnd ? 7 : 6,
+    };
+  }
+
+  private getLevel3GroundFrame(col: number, row: number): number {
+    // Section A: Left Grove Clearing (cols 0..8)
+    if (col <= 8) {
+      if (row === 0) {
+        if (col === 8) return 2; // grass-top-right
+        return col % 3 === 1 ? 3 : 1;
+      }
+      if (col === 8) return 15; // dirt-right
+      return 8 + (col % 3);
+    }
+
+    // Section C: Right Grove & Stone Sanctum (cols 18..29)
+    if (col === 18) return row === 0 ? 0 : 11; // grass-top-left / dirt-left
+    if (col <= 21) return row === 0 ? (col % 2 === 0 ? 3 : 1) : 8 + (col % 3);
+    if (col === 22) return row === 0 ? 39 : 33; // grass-on-stone transition
+    return row === 0 ? 25 : col % 2 === 0 ? 34 : 28; // stone sanctum
+  }
+
+  private getLevel3PlatformTile(
+    startCol: number,
+    endCol: number,
+    topOffsetTiles: number,
+    col: number,
+  ): { key: string; frame: number } {
+    const isStart = col === startCol;
+    const isEnd = col === endCol;
+
+    // Warmup step (cols 5..6)
+    if (topOffsetTiles === 1) {
+      return { key: TEXTURE_KEYS.CORE_TERRAIN, frame: isStart ? 0 : isEnd ? 2 : 1 };
+    }
+    // Section C Exit Sanctum (cols 25..29): Stone Platform
+    if (startCol === 25) {
+      return { key: TEXTURE_KEYS.CORE_TERRAIN, frame: isStart ? 36 : isEnd ? 38 : 37 };
+    }
+    // Section B Stepping Deck (cols 11..13): Wooden Platform
+    if (startCol === 11) {
+      return { key: TEXTURE_KEYS.WOOD_PLATFORM, frame: isStart ? 0 : isEnd ? 2 : 1 };
+    }
+    // Root Terrace (cols 7..9) & Relay Deck (cols 15..18): Mossy Grass Platforms
+    return { key: TEXTURE_KEYS.CORE_TERRAIN, frame: isStart ? 5 : isEnd ? 7 : 6 };
+  }
+
+  private getLevel1GroundFrame(col: number, row: number): number {
+    // Area 3 Power Gate stone sanctum (cols 23..29) with grass-on-stone transition at col 23
+    if (col === 23) {
+      return row === 0 ? 39 : 33;
+    }
+    if (col >= 24) {
+      if (row === 0) return 25;
+      return col % 3 === 0 ? 34 : 28;
+    }
+
+    // Pit edges: left island ends at col 10, right island starts at col 17
+    if (row === 0) {
+      if (col === 10) return 2; // grass-top-right
+      if (col === 17) return 0; // grass-top-left
+      return col % 4 === 2 ? 3 : 1; // grass-top-mid / alt
+    }
+    if (col === 10) return 15; // dirt-right
+    if (col === 17) return 11; // dirt-left
+    return 8 + (col % 3); // dirt-mid / alt1 / alt2
   }
 }

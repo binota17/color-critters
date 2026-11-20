@@ -28,6 +28,18 @@ export class EffectsHelper {
     }
   }
 
+  spawnSwitchRing(x: number, y: number, color: number): void {
+    const ring = this.scene.add.circle(x, y, 10).setStrokeStyle(2, color, 0.9).setDepth(4);
+    this.scene.tweens.add({
+      targets: ring,
+      scale: 1.85,
+      alpha: 0,
+      duration: 180,
+      ease: 'Cubic.easeOut',
+      onComplete: () => ring.destroy(),
+    });
+  }
+
   spawnAbilityBurst(x: number, y: number, color: number): void {
     const pulse = this.scene.add.circle(x, y, 14).setStrokeStyle(3, color).setDepth(4);
     this.scene.tweens.add({
@@ -75,5 +87,15 @@ export class EffectsHelper {
       ease: 'Cubic.easeOut',
       onComplete: () => feedback.destroy(),
     });
+
+    if (!success) {
+      this.scene.tweens.add({
+        targets: feedback,
+        x: feedback.x + 3,
+        duration: 45,
+        yoyo: true,
+        repeat: 2,
+      });
+    }
   }
 }

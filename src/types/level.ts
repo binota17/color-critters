@@ -52,10 +52,21 @@ export interface WorldHintDef {
   text: string;
 }
 
+export interface ResonancePairDef {
+  rootId: string;
+  rootCol: number;
+  rootTopOffsetTiles?: number;
+  relayId: string;
+  relayCol: number;
+  relayTopOffsetTiles?: number;
+  connectedConditionKey: string;
+  poweredConditionKey: string;
+}
+
 export interface LevelDefinition {
   id: string;
   name: string;
-  theme?: 'meadow' | 'canopy';
+  theme?: 'meadow' | 'canopy' | 'grove';
   groundThicknessTiles: number;
   pitSpans: GridSpan[];
   platforms: PlatformDef[];
@@ -65,6 +76,7 @@ export interface LevelDefinition {
   pressurePlates: PressurePlateDef[];
   electricNodes: ElectricNodeDef[];
   electricDoors: ElectricDoorDef[];
+  resonancePairs?: ResonancePairDef[];
   exitGate: ExitGateDef;
   hints: WorldHintDef[];
 }

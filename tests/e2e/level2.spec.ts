@@ -18,6 +18,17 @@ async function getGameState(page: Page): Promise<DevGameState> {
   return page.evaluate(() => (window as unknown as { __CC_TEST_STATE__: DevGameState }).__CC_TEST_STATE__);
 }
 
+async function waitForGrounded(page: Page, critter: 'moss' | 'zippy'): Promise<void> {
+  await page.waitForFunction(
+    (c) => {
+      const s = (window as unknown as { __CC_TEST_STATE__?: DevGameState }).__CC_TEST_STATE__;
+      const st = s?.[c]?.state;
+      return st === 'IDLE' || st === 'RUNNING';
+    },
+    critter,
+  );
+}
+
 async function tapKey(page: Page, key: string, holdMs = 70): Promise<void> {
   await page.keyboard.down(key);
   await page.waitForTimeout(holdMs);
@@ -118,14 +129,28 @@ test('Level 2: The Canopy Relay — full playthrough and reset', async ({ page }
 
   // 5. Switch to ZIPPY, walk through open ElectricDoor -> jump onto Exit Perch (col 26..29, top=412) -> reach ExitGate (col 28, x=912)
   await tapKey(page, 'Digit2');
-  await moveToX(page, 'zippy', 805);
+  await waitForGrounded(page, 'zippy');
+  await moveToX(page, 'zippy', 795);
+  await waitForGrounded(page, 'zippy');
   await page.keyboard.down('KeyD');
   await tapKey(page, 'Space', 60);
-  await page.waitForTimeout(380);
+  await page.waitForFunction(
+    () => {
+      const s = (window as unknown as { __CC_TEST_STATE__?: DevGameState }).__CC_TEST_STATE__;
+      return s?.zippy !== undefined && s.zippy.y < 415;
+    },
+    undefined,
+    { timeout: 3000 },
+  );
   await page.keyboard.up('KeyD');
-  await page.waitForTimeout(250);
+  await waitForGrounded(page, 'zippy');
+  expect((await getGameState(page)).zippy!.y).toBeLessThan(415);
   await moveToX(page, 'zippy', 912);
-  await page.waitForTimeout(150);
+  await page.waitForFunction(
+    () => (window as unknown as { __CC_TEST_STATE__?: DevGameState }).__CC_TEST_STATE__?.puzzle?.completed === true,
+    undefined,
+    { timeout: 3000 },
+  );
 
   expect((await getGameState(page)).puzzle?.completed).toBe(true);
 

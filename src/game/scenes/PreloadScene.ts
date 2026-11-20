@@ -44,11 +44,49 @@ export class PreloadScene extends Phaser.Scene {
 
     this.load.image(TEXTURE_KEYS.CLOUD, 'assets/environment/cloud.png');
     this.load.image(TEXTURE_KEYS.GRASS_TUFT, 'assets/environment/grass-tuft.png');
+
+    // Production terrain, platforms, props & background layers (used by Level 1 & QA scenes)
+    this.load.spritesheet(TEXTURE_KEYS.CORE_TERRAIN, 'assets/tiles/core-terrain-sheet.png', {
+      frameWidth: TILE_SIZE,
+      frameHeight: TILE_SIZE,
+    });
+    this.load.spritesheet(TEXTURE_KEYS.WOOD_PLATFORM, 'assets/environment/prototype/platform-tiles.png', {
+      frameWidth: TILE_SIZE,
+      frameHeight: TILE_SIZE,
+    });
+    this.load.spritesheet(TEXTURE_KEYS.PROPS_FOLIAGE, 'assets/environment/props/props-foliage.png', {
+      frameWidth: 48,
+      frameHeight: 32,
+    });
+    this.load.spritesheet(TEXTURE_KEYS.PROPS_MUSHROOMS, 'assets/environment/props/props-mushrooms.png', {
+      frameWidth: 32,
+      frameHeight: 32,
+    });
+    this.load.spritesheet(TEXTURE_KEYS.PROPS_ROCKS, 'assets/environment/props/props-rocks.png', {
+      frameWidth: 48,
+      frameHeight: 32,
+    });
+    this.load.spritesheet(TEXTURE_KEYS.PROPS_FLOWERS, 'assets/environment/props/props-flowers.png', {
+      frameWidth: 32,
+      frameHeight: 32,
+    });
+    this.load.image(TEXTURE_KEYS.BG_HILLS, 'assets/environment/prototype/bg-hills.png');
+    this.load.image(TEXTURE_KEYS.BG_CANOPY, 'assets/environment/prototype/bg-canopy.png');
   }
 
   create(): void {
     this.registerCritterAnimations(CRITTER_IDS.MOSS, TEXTURE_KEYS.MOSS_SHEET);
     this.registerCritterAnimations(CRITTER_IDS.ZIPPY, TEXTURE_KEYS.ZIPPY_SHEET);
+    const requestedScene = new URLSearchParams(window.location.search).get('scene');
+    if (
+      requestedScene === 'EnvStylePrototypeScene' ||
+      requestedScene === 'TerrainPreviewScene' ||
+      requestedScene === 'PropsPlacementScene' ||
+      requestedScene === 'TwinResonanceScene'
+    ) {
+      this.scene.start(requestedScene);
+      return;
+    }
     this.scene.start(SCENE_KEYS.MAIN_MENU);
   }
 
@@ -59,30 +97,30 @@ export class PreloadScene extends Phaser.Scene {
 
     this.anims.create({
       key: `${id}-idle`,
-      frames: this.anims.generateFrameNumbers(sheetKey, { start: 0, end: 1 }),
-      frameRate: 3,
+      frames: this.anims.generateFrameNumbers(sheetKey, { start: 0, end: 3 }),
+      frameRate: 4,
       repeat: -1,
     });
 
     this.anims.create({
       key: `${id}-run`,
-      frames: this.anims.generateFrameNumbers(sheetKey, { start: 2, end: 3 }),
-      frameRate: 8,
+      frames: this.anims.generateFrameNumbers(sheetKey, { start: 4, end: 7 }),
+      frameRate: 10,
       repeat: -1,
     });
 
     this.anims.create({
       key: `${id}-jump`,
-      frames: [{ key: sheetKey, frame: 4 }],
-      frameRate: 1,
+      frames: this.anims.generateFrameNumbers(sheetKey, { start: 8, end: 9 }),
+      frameRate: 8,
       repeat: 0,
     });
 
     this.anims.create({
       key: `${id}-fall`,
-      frames: [{ key: sheetKey, frame: 5 }],
-      frameRate: 1,
-      repeat: 0,
+      frames: this.anims.generateFrameNumbers(sheetKey, { start: 10, end: 11 }),
+      frameRate: 6,
+      repeat: -1,
     });
   }
 }
