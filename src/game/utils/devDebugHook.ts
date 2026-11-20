@@ -11,6 +11,9 @@ export interface DevCritterSnapshot {
 
 export interface DevGameState {
   scene: string;
+  levelId?: string;
+  isPaused?: boolean;
+  nextLevelId?: string | null;
   activeCritter?: CritterId;
   moss?: DevCritterSnapshot;
   zippy?: DevCritterSnapshot;

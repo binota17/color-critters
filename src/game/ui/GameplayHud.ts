@@ -11,9 +11,17 @@ export interface HudUpdateData {
   nodeOn: boolean;
 }
 
+export interface GameplayHudOptions {
+  isFinalLevel?: boolean;
+  onResume?: () => void;
+  onNextLevel?: () => void;
+  onReplay?: () => void;
+  onMainMenu?: () => void;
+}
+
 /**
  * Pixel-art Gameplay HUD displaying active/inactive Critter portraits,
- * ability & cooldown status, puzzle locks, and completion overlay.
+ * ability & cooldown status, puzzle locks, Pause Menu, and Completion overlay.
  */
 export class GameplayHud {
   private readonly activePortrait: Phaser.GameObjects.Image;
@@ -27,9 +35,12 @@ export class GameplayHud {
   private readonly nodeIcon: Phaser.GameObjects.Image;
   private readonly doorIcon: Phaser.GameObjects.Image;
   private readonly doorLabel: Phaser.GameObjects.Text;
+  private readonly completeScrim: Phaser.GameObjects.NineSlice;
   private readonly completeOverlay: Phaser.GameObjects.Container;
+  private readonly pauseScrim: Phaser.GameObjects.NineSlice;
+  private readonly pauseOverlay: Phaser.GameObjects.Container;
 
-  constructor(scene: Phaser.Scene, levelName: string) {
+  constructor(scene: Phaser.Scene, levelName: string, options: GameplayHudOptions = {}) {
     // Top-left compact HUD panel (9-slice pixel frame)
     scene.add
       .nineslice(12, 10, TEXTURE_KEYS.UI_PANEL, undefined, 456, 62, 8, 8, 8, 8)
@@ -130,11 +141,11 @@ export class GameplayHud {
       .setDepth(9);
 
     // Bottom control strip backed by pixel-art slate bar
-    const controlText = `${levelName}  |  A/D Move  •  Space Jump  •  Tab / 1-2 Switch  •  E Ability  •  R Reset`;
+    const controlText = `${levelName}  |  A/D Move  •  Space Jump  •  Tab / 1-2 Switch  •  E Ability  •  R Reset  •  Esc Pause`;
     const controlLabel = scene.add
       .text(22, GAME_HEIGHT - 19, controlText, {
         fontFamily: 'monospace',
-        fontSize: '12px',
+        fontSize: '11px',
         color: '#fbefd5',
       })
       .setOrigin(0, 0.5)
@@ -157,83 +168,337 @@ export class GameplayHud {
       .setAlpha(0.9)
       .setDepth(8);
 
-    // Level Complete overlay (pixel-art frame + stars + portraits)
+    // Completion overlay scrim & modal
+    this.completeScrim = scene.add
+      .nineslice(
+        GAME_WIDTH / 2,
+        GAME_HEIGHT / 2,
+        TEXTURE_KEYS.UI_BAR,
+        undefined,
+        GAME_WIDTH + 24,
+        GAME_HEIGHT + 24,
+        6,
+        6,
+        6,
+        6,
+      )
+      .setAlpha(0.42)
+      .setDepth(18)
+      .setInteractive()
+      .setVisible(false);
+
+    this.completeOverlay = this.buildCompleteOverlay(scene, levelName, options);
+
+    // Pause menu scrim & modal
+    this.pauseScrim = scene.add
+      .nineslice(
+        GAME_WIDTH / 2,
+        GAME_HEIGHT / 2,
+        TEXTURE_KEYS.UI_BAR,
+        undefined,
+        GAME_WIDTH + 24,
+        GAME_HEIGHT + 24,
+        6,
+        6,
+        6,
+        6,
+      )
+      .setAlpha(0.56)
+      .setDepth(18)
+      .setInteractive()
+      .setVisible(false);
+
+    this.pauseOverlay = this.buildPauseOverlay(scene, levelName, options);
+  }
+
+  private buildCompleteOverlay(
+    scene: Phaser.Scene,
+    levelName: string,
+    options: GameplayHudOptions,
+  ): Phaser.GameObjects.Container {
+    const isFinalLevel = Boolean(options.isFinalLevel);
     const box = scene.add.nineslice(
       0,
       0,
       TEXTURE_KEYS.UI_PANEL_COMPLETE,
       undefined,
-      470,
-      132,
+      504,
+      204,
       8,
       8,
       8,
       8,
     );
-    const leftStar = scene.add.image(-190, -22, TEXTURE_KEYS.HUD_ICONS, 9).setScale(1.5);
-    const rightStar = scene.add.image(190, -22, TEXTURE_KEYS.HUD_ICONS, 9).setScale(1.5);
-    const mossBadge = scene.add.image(-168, 24, TEXTURE_KEYS.CRITTER_PORTRAITS, 0);
-    const zippyBadge = scene.add.image(168, 24, TEXTURE_KEYS.CRITTER_PORTRAITS, 1);
+    const leftStar = scene.add.image(-204, -62, TEXTURE_KEYS.HUD_ICONS, 9).setScale(1.5);
+    const rightStar = scene.add.image(204, -62, TEXTURE_KEYS.HUD_ICONS, 9).setScale(1.5);
+    const mossBadge = scene.add.image(-204, -14, TEXTURE_KEYS.CRITTER_PORTRAITS, 0);
+    const zippyBadge = scene.add.image(204, -14, TEXTURE_KEYS.CRITTER_PORTRAITS, 1);
 
+    const titleText = isFinalLevel ? 'CAMPAIGN COMPLETE!' : `${levelName.toUpperCase()} COMPLETE!`;
     const title = scene.add
-      .text(0, -22, `${levelName.toUpperCase()} COMPLETE!`, {
+      .text(0, -62, titleText, {
         fontFamily: 'monospace',
-        fontSize: '19px',
+        fontSize: isFinalLevel ? '21px' : '18px',
         fontStyle: 'bold',
         color: '#14532d',
       })
       .setOrigin(0.5);
+
+    const subText = isFinalLevel
+      ? `${levelName} — All Stages Cleared!`
+      : 'MOSS & ZIPPY unlocked the exit gate!';
     const sub = scene.add
-      .text(0, 24, 'Press R to Replay', {
+      .text(0, -32, subText, {
         fontFamily: 'monospace',
-        fontSize: '15px',
+        fontSize: '12px',
         fontStyle: 'bold',
         color: '#166534',
       })
       .setOrigin(0.5);
 
-    this.completeOverlay = scene.add
-      .container(GAME_WIDTH / 2, GAME_HEIGHT * 0.32, [
-        box,
-        leftStar,
-        rightStar,
-        mossBadge,
-        zippyBadge,
-        title,
-        sub,
-      ])
-      .setDepth(10)
+    const children: Phaser.GameObjects.GameObject[] = [
+      box,
+      leftStar,
+      rightStar,
+      mossBadge,
+      zippyBadge,
+      title,
+      sub,
+    ];
+
+    if (isFinalLevel) {
+      children.push(
+        ...this.createModalButton(scene, {
+          x: 0,
+          y: 12,
+          width: 260,
+          height: 38,
+          label: 'MAIN MENU [Enter]',
+          primary: true,
+          onClick: () => options.onMainMenu?.(),
+        }),
+        ...this.createModalButton(scene, {
+          x: 0,
+          y: 62,
+          width: 220,
+          height: 36,
+          label: 'REPLAY [R]',
+          primary: false,
+          onClick: () => options.onReplay?.(),
+        }),
+      );
+    } else {
+      children.push(
+        ...this.createModalButton(scene, {
+          x: 0,
+          y: 12,
+          width: 260,
+          height: 38,
+          label: 'NEXT LEVEL [Enter]',
+          primary: true,
+          onClick: () => options.onNextLevel?.(),
+        }),
+        ...this.createModalButton(scene, {
+          x: -108,
+          y: 62,
+          width: 196,
+          height: 36,
+          label: 'REPLAY [R]',
+          primary: false,
+          onClick: () => options.onReplay?.(),
+        }),
+        ...this.createModalButton(scene, {
+          x: 108,
+          y: 62,
+          width: 196,
+          height: 36,
+          label: 'MAIN MENU [M]',
+          primary: false,
+          onClick: () => options.onMainMenu?.(),
+        }),
+      );
+    }
+
+    return scene.add
+      .container(GAME_WIDTH / 2, GAME_HEIGHT * 0.44, children)
+      .setDepth(20)
       .setVisible(false);
   }
 
+  private buildPauseOverlay(
+    scene: Phaser.Scene,
+    levelName: string,
+    options: GameplayHudOptions,
+  ): Phaser.GameObjects.Container {
+    const box = scene.add.nineslice(
+      0,
+      0,
+      TEXTURE_KEYS.UI_PANEL,
+      undefined,
+      360,
+      252,
+      8,
+      8,
+      8,
+      8,
+    );
+    const mossBadge = scene.add
+      .image(-132, -80, TEXTURE_KEYS.CRITTER_PORTRAITS, 0)
+      .setScale(0.9);
+    const zippyBadge = scene.add
+      .image(132, -80, TEXTURE_KEYS.CRITTER_PORTRAITS, 1)
+      .setScale(0.9);
+
+    const title = scene.add
+      .text(0, -88, 'PAUSED', {
+        fontFamily: 'monospace',
+        fontSize: '22px',
+        fontStyle: 'bold',
+        color: '#3e273b',
+      })
+      .setOrigin(0.5);
+
+    const subtitle = scene.add
+      .text(0, -60, levelName, {
+        fontFamily: 'monospace',
+        fontSize: '12px',
+        fontStyle: 'bold',
+        color: '#444d6b',
+      })
+      .setOrigin(0.5);
+
+    const resumeBtn = this.createModalButton(scene, {
+      x: 0,
+      y: -14,
+      width: 244,
+      height: 38,
+      label: 'RESUME [Esc]',
+      primary: true,
+      onClick: () => options.onResume?.(),
+    });
+    const restartBtn = this.createModalButton(scene, {
+      x: 0,
+      y: 36,
+      width: 244,
+      height: 36,
+      label: 'RESTART LEVEL [R]',
+      primary: false,
+      onClick: () => options.onReplay?.(),
+    });
+    const menuBtn = this.createModalButton(scene, {
+      x: 0,
+      y: 84,
+      width: 244,
+      height: 36,
+      label: 'MAIN MENU [M]',
+      primary: false,
+      onClick: () => options.onMainMenu?.(),
+    });
+
+    return scene.add
+      .container(GAME_WIDTH / 2, GAME_HEIGHT * 0.48, [
+        box,
+        mossBadge,
+        zippyBadge,
+        title,
+        subtitle,
+        ...resumeBtn,
+        ...restartBtn,
+        ...menuBtn,
+      ])
+      .setDepth(20)
+      .setVisible(false);
+  }
+
+  private createModalButton(
+    scene: Phaser.Scene,
+    config: {
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      label: string;
+      primary: boolean;
+      onClick: () => void;
+    },
+  ): Phaser.GameObjects.GameObject[] {
+    const baseTex = config.primary ? TEXTURE_KEYS.UI_BUTTON_GREEN : TEXTURE_KEYS.UI_BUTTON_WOOD;
+    const hoverTex = config.primary
+      ? TEXTURE_KEYS.UI_BUTTON_GREEN_HOVER
+      : TEXTURE_KEYS.UI_BUTTON_WOOD_HOVER;
+
+    const bg = scene.add
+      .nineslice(config.x, config.y, baseTex, undefined, config.width, config.height, 8, 8, 8, 8)
+      .setInteractive({ useHandCursor: true });
+
+    const text = scene.add
+      .text(config.x, config.y, config.label, {
+        fontFamily: 'monospace',
+        fontSize: config.primary ? '14px' : '13px',
+        fontStyle: 'bold',
+        color: config.primary ? '#ffffff' : '#3e273b',
+      })
+      .setOrigin(0.5);
+
+    bg.on('pointerover', () => {
+      bg.setTexture(hoverTex);
+    });
+    bg.on('pointerout', () => {
+      bg.setTexture(baseTex);
+    });
+    bg.on('pointerdown', () => {
+      config.onClick();
+    });
+
+    return [bg, text];
+  }
+
+  private lastIsMoss: boolean | null = null;
+  private lastDoorOpen: boolean | null = null;
+
   update(data: HudUpdateData): void {
     const isMoss = data.active.id === CRITTER_IDS.MOSS;
-    this.activePortrait.setFrame(isMoss ? 0 : 1);
-    this.activeBadgeBg.setTexture(
-      isMoss ? TEXTURE_KEYS.UI_BUTTON_GREEN : TEXTURE_KEYS.UI_BUTTON_WOOD,
-    );
-    this.activeLabel.setText(data.active.displayName);
-    this.abilityIcon.setFrame(isMoss ? 0 : 1);
+    if (this.lastIsMoss !== isMoss) {
+      this.lastIsMoss = isMoss;
+      this.activePortrait.setFrame(isMoss ? 0 : 1);
+      this.activeBadgeBg.setTexture(
+        isMoss ? TEXTURE_KEYS.UI_BUTTON_GREEN : TEXTURE_KEYS.UI_BUTTON_WOOD,
+      );
+      this.activeLabel.setText(data.active.displayName);
+      this.abilityIcon.setFrame(isMoss ? 0 : 1);
+
+      const isInactiveMoss = data.inactive.id === CRITTER_IDS.MOSS;
+      const switchKey = isInactiveMoss ? '1' : '2';
+      this.inactivePortrait.setFrame(isInactiveMoss ? 0 : 1);
+      this.inactiveLabel.setText(`Standby: [${switchKey} / Tab] ${data.inactive.displayName}`);
+    }
 
     const statusText =
       data.cooldownMs > 0 ? `Cooldown ${(data.cooldownMs / 1000).toFixed(1)}s` : 'Ready [E]';
     this.abilityLabel.setText(`${data.abilityName}  •  ${statusText}`);
 
-    const isInactiveMoss = data.inactive.id === CRITTER_IDS.MOSS;
-    const switchKey = isInactiveMoss ? '1' : '2';
-    this.inactivePortrait.setFrame(isInactiveMoss ? 0 : 1);
-    this.inactiveLabel.setText(`Standby: [${switchKey} / Tab] ${data.inactive.displayName}`);
-
     this.plateIcon.setFrame(data.plateOn ? 3 : 2);
     this.nodeIcon.setFrame(data.nodeOn ? 5 : 4);
 
     const doorOpen = data.plateOn && data.nodeOn;
-    this.doorIcon.setFrame(doorOpen ? 7 : 6);
-    this.doorLabel.setText(doorOpen ? 'Door: OPEN' : 'Door: LOCKED');
-    this.doorLabel.setColor(doorOpen ? '#15803d' : '#991b1b');
+    if (this.lastDoorOpen !== doorOpen) {
+      this.lastDoorOpen = doorOpen;
+      this.doorIcon.setFrame(doorOpen ? 7 : 6);
+      this.doorLabel.setText(doorOpen ? 'Door: OPEN' : 'Door: LOCKED');
+      this.doorLabel.setColor(doorOpen ? '#15803d' : '#991b1b');
+    }
   }
 
   setCompleteVisible(visible: boolean): void {
+    this.completeScrim.setVisible(visible);
     this.completeOverlay.setVisible(visible);
+    if (visible) {
+      this.setPauseVisible(false);
+    }
+  }
+
+  setPauseVisible(visible: boolean): void {
+    this.pauseScrim.setVisible(visible);
+    this.pauseOverlay.setVisible(visible);
   }
 }

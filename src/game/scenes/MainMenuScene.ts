@@ -98,8 +98,10 @@ export class MainMenuScene extends Phaser.Scene {
       .setDepth(2)
       .play(`${CRITTER_IDS.ZIPPY}-idle`);
 
-    this.input.keyboard?.once('keydown-ENTER', () => this.startGame('level-01'));
-    this.input.keyboard?.once('keydown-SPACE', () => this.startGame('level-01'));
+    this.time.delayedCall(150, () => {
+      this.input.keyboard?.once('keydown-ENTER', () => this.startGame('level-01'));
+      this.input.keyboard?.once('keydown-SPACE', () => this.startGame('level-01'));
+    });
 
     publishDevGameState({ scene: SCENE_KEYS.MAIN_MENU });
   }

@@ -8,10 +8,14 @@ export interface InputState {
   switchPressed: boolean;
   selectMossPressed: boolean;
   selectZippyPressed: boolean;
+  pausePressed: boolean;
+  confirmPressed: boolean;
+  nextPressed: boolean;
+  menuPressed: boolean;
 }
 
 /**
- * Reads raw keyboard input for movement, jump, switching, and reset without gameplay rules.
+ * Reads raw keyboard input for movement, jump, switching, pause, and menu actions without gameplay rules.
  */
 export class InputManager {
   private readonly leftKeys: Phaser.Input.Keyboard.Key[];
@@ -22,6 +26,11 @@ export class InputManager {
   private readonly switchKey: Phaser.Input.Keyboard.Key | null;
   private readonly selectMossKey: Phaser.Input.Keyboard.Key | null;
   private readonly selectZippyKey: Phaser.Input.Keyboard.Key | null;
+  private readonly pauseKey: Phaser.Input.Keyboard.Key | null;
+  private readonly confirmKey: Phaser.Input.Keyboard.Key | null;
+  private readonly nextKey: Phaser.Input.Keyboard.Key | null;
+  private readonly menuKey: Phaser.Input.Keyboard.Key | null;
+  private readonly pending = new Set<Phaser.Input.Keyboard.Key>();
 
   constructor(scene: Phaser.Scene) {
     const keyboard = scene.input.keyboard;
@@ -34,6 +43,10 @@ export class InputManager {
       this.switchKey = null;
       this.selectMossKey = null;
       this.selectZippyKey = null;
+      this.pauseKey = null;
+      this.confirmKey = null;
+      this.nextKey = null;
+      this.menuKey = null;
       return;
     }
 
@@ -45,13 +58,33 @@ export class InputManager {
       keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D),
       keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT),
     ];
-    this.jumpKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
-    this.abilityKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E);
-    this.resetKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R);
+    this.jumpKey = this.bindPress(keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE));
+    this.abilityKey = this.bindPress(keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E));
+    this.resetKey = this.bindPress(keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R));
     // Capture Tab so browser focus does not leave the game canvas
-    this.switchKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.TAB, true);
-    this.selectMossKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ONE);
-    this.selectZippyKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.TWO);
+    this.switchKey = this.bindPress(keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.TAB, true));
+    this.selectMossKey = this.bindPress(keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ONE));
+    this.selectZippyKey = this.bindPress(keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.TWO));
+    this.pauseKey = this.bindPress(keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC));
+    this.confirmKey = this.bindPress(keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER));
+    this.nextKey = this.bindPress(keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.N));
+    this.menuKey = this.bindPress(keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.M));
+  }
+
+  private bindPress(key: Phaser.Input.Keyboard.Key): Phaser.Input.Keyboard.Key {
+    key.on('down', () => {
+      this.pending.add(key);
+    });
+    return key;
+  }
+
+  private consumePress(key: Phaser.Input.Keyboard.Key | null): boolean {
+    if (!key) {
+      return false;
+    }
+    const justDown = Phaser.Input.Keyboard.JustDown(key);
+    const latched = this.pending.delete(key);
+    return justDown || latched;
   }
 
   readInput(): InputState {
@@ -67,16 +100,16 @@ export class InputManager {
 
     return {
       moveX,
-      jumpPressed: this.jumpKey ? Phaser.Input.Keyboard.JustDown(this.jumpKey) : false,
-      abilityPressed: this.abilityKey ? Phaser.Input.Keyboard.JustDown(this.abilityKey) : false,
-      resetPressed: this.resetKey ? Phaser.Input.Keyboard.JustDown(this.resetKey) : false,
-      switchPressed: this.switchKey ? Phaser.Input.Keyboard.JustDown(this.switchKey) : false,
-      selectMossPressed: this.selectMossKey
-        ? Phaser.Input.Keyboard.JustDown(this.selectMossKey)
-        : false,
-      selectZippyPressed: this.selectZippyKey
-        ? Phaser.Input.Keyboard.JustDown(this.selectZippyKey)
-        : false,
+      jumpPressed: this.consumePress(this.jumpKey),
+      abilityPressed: this.consumePress(this.abilityKey),
+      resetPressed: this.consumePress(this.resetKey),
+      switchPressed: this.consumePress(this.switchKey),
+      selectMossPressed: this.consumePress(this.selectMossKey),
+      selectZippyPressed: this.consumePress(this.selectZippyKey),
+      pausePressed: this.consumePress(this.pauseKey),
+      confirmPressed: this.consumePress(this.confirmKey),
+      nextPressed: this.consumePress(this.nextKey),
+      menuPressed: this.consumePress(this.menuKey),
     };
   }
 }

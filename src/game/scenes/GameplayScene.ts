@@ -9,7 +9,7 @@ import {
   TEXTURE_KEYS,
   TILE_SIZE,
 } from '../config/constants';
-import { getLevelById } from '../data/levels';
+import { getLevelById, getNextLevelId } from '../data/levels';
 import { Critter } from '../entities/critters/Critter';
 import { ElectricDoor } from '../entities/objects/ElectricDoor';
 import { ElectricNode } from '../entities/objects/ElectricNode';
@@ -65,6 +65,8 @@ export class GameplayScene extends Phaser.Scene {
   private wasDoorOpen = false;
   private wasPlateOn = false;
   private groundTopY = 0;
+  private isPaused = false;
+  private nextLevelId: string | null = null;
 
   constructor() {
     super({ key: SCENE_KEYS.GAMEPLAY });
@@ -72,10 +74,13 @@ export class GameplayScene extends Phaser.Scene {
 
   init(data?: { levelId?: string }): void {
     this.level = getLevelById(data?.levelId);
+    this.nextLevelId = getNextLevelId(this.level.id);
+    this.isPaused = false;
   }
 
   create(): void {
     this.cameras.main.setBackgroundColor(COLORS.SKY);
+    this.physics.world.resume();
 
     // Block horizontal screen edges while allowing falling below the bottom threshold for respawn
     this.physics.world.setBounds(0, 0, GAME_WIDTH, GAME_HEIGHT, true, true, false, false);
@@ -236,6 +241,7 @@ export class GameplayScene extends Phaser.Scene {
     this.createHudElements();
 
     this.puzzleSystem.onComplete(() => {
+      this.setPaused(false);
       for (const critter of this.critters) {
         critter.setVelocity(0, 0);
       }
@@ -247,6 +253,8 @@ export class GameplayScene extends Phaser.Scene {
     });
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.isPaused = false;
+      this.tweens.killAll();
       this.audioManager.destroy();
     });
 
@@ -254,16 +262,49 @@ export class GameplayScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
-    this.updateClouds(delta);
-
     const input = this.inputManager.readInput();
 
-    if (input.resetPressed) {
-      this.resetLevel();
+    if (this.puzzleSystem.isCompleted()) {
+      if (input.resetPressed) {
+        this.resetLevel();
+        return;
+      }
+      if (input.confirmPressed || input.nextPressed) {
+        if (this.nextLevelId) {
+          this.goToNextLevel();
+        } else {
+          this.goToMainMenu();
+        }
+        return;
+      }
+      if (input.menuPressed) {
+        this.goToMainMenu();
+        return;
+      }
       return;
     }
 
-    if (this.puzzleSystem.isCompleted()) {
+    if (input.pausePressed) {
+      this.setPaused(!this.isPaused);
+      return;
+    }
+
+    if (this.isPaused) {
+      if (input.resetPressed) {
+        this.resetLevel();
+        return;
+      }
+      if (input.menuPressed) {
+        this.goToMainMenu();
+        return;
+      }
+      return;
+    }
+
+    this.updateClouds(delta);
+
+    if (input.resetPressed) {
+      this.resetLevel();
       return;
     }
 
@@ -361,6 +402,7 @@ export class GameplayScene extends Phaser.Scene {
   }
 
   private resetLevel(): void {
+    this.setPaused(false);
     this.controllers[CRITTER_IDS.MOSS].reset();
     this.controllers[CRITTER_IDS.ZIPPY].reset();
     this.switchSystem.reset();
@@ -374,6 +416,51 @@ export class GameplayScene extends Phaser.Scene {
     this.runDustTimerMs = 0;
     this.hud.setCompleteVisible(false);
     this.updateVisualIndicators();
+  }
+
+  private setPaused(paused: boolean): void {
+    if (paused && this.puzzleSystem.isCompleted()) {
+      return;
+    }
+    if (this.isPaused === paused) {
+      this.hud.setPauseVisible(paused);
+      return;
+    }
+
+    this.isPaused = paused;
+    this.hud.setPauseVisible(paused);
+
+    if (paused) {
+      this.physics.world.pause();
+      for (const critter of this.critters) {
+        critter.anims.pause();
+      }
+    } else {
+      this.physics.world.resume();
+      for (const critter of this.critters) {
+        critter.anims.resume();
+      }
+    }
+
+    this.publishState();
+  }
+
+  private goToNextLevel(): void {
+    if (!this.nextLevelId) {
+      this.goToMainMenu();
+      return;
+    }
+    this.isPaused = false;
+    this.physics.world.resume();
+    this.tweens.killAll();
+    this.scene.start(SCENE_KEYS.GAMEPLAY, { levelId: this.nextLevelId });
+  }
+
+  private goToMainMenu(): void {
+    this.isPaused = false;
+    this.physics.world.resume();
+    this.tweens.killAll();
+    this.scene.start(SCENE_KEYS.MAIN_MENU);
   }
 
   private createBackgroundDecor(groundTopY: number): void {
@@ -579,7 +666,13 @@ export class GameplayScene extends Phaser.Scene {
   }
 
   private createHudElements(): void {
-    this.hud = new GameplayHud(this, this.level.name);
+    this.hud = new GameplayHud(this, this.level.name, {
+      isFinalLevel: this.nextLevelId === null,
+      onResume: () => this.setPaused(false),
+      onNextLevel: () => this.goToNextLevel(),
+      onReplay: () => this.resetLevel(),
+      onMainMenu: () => this.goToMainMenu(),
+    });
 
     this.activeIndicator = this.add
       .image(0, 0, TEXTURE_KEYS.HUD_ICONS, 8)
@@ -654,45 +747,67 @@ export class GameplayScene extends Phaser.Scene {
       nodeOn,
     });
 
+    this.publishState(plateOn, nodeOn, vineGrown);
+  }
+
+  private publishState(plateOn?: boolean, nodeOn?: boolean, vineGrown?: boolean): void {
+    const active = this.switchSystem.getActiveCritter();
     const moss = this.critters.find((c) => c.id === CRITTER_IDS.MOSS);
     const zippy = this.critters.find((c) => c.id === CRITTER_IDS.ZIPPY);
-    if (moss && zippy) {
-      const pair = this.resonancePairs[0];
-      const powered = pair ? pair.relay.isRelayPowered() : false;
-      publishDevGameState({
-        scene: SCENE_KEYS.GAMEPLAY,
-        activeCritter: active.id,
-        moss: {
-          x: Math.round(moss.x),
-          y: Math.round(moss.y),
-          state: moss.critterState,
-          facing: moss.facing,
-        },
-        zippy: {
-          x: Math.round(zippy.x),
-          y: Math.round(zippy.y),
-          state: zippy.critterState,
-          facing: zippy.facing,
-        },
-        puzzle: {
-          vineGrown,
-          plateOn,
-          nodeOn,
-          doorOpen: plateOn && nodeOn,
-          completed: this.puzzleSystem.isCompleted(),
-        },
-        resonance: pair
-          ? {
-              rootConnected: pair.root.isRootConnected(),
-              vineVisible: pair.connection.isVisible(),
-              energyTransmitting: pair.connection.isTransmitting(),
-              relayPowered: powered,
-              gateUnlocked: plateOn && powered,
-              completed: this.puzzleSystem.isCompleted(),
-            }
-          : undefined,
-      });
+    if (!moss || !zippy) {
+      return;
     }
+
+    const plateKey = this.level.pressurePlates[0]?.conditionKey ?? 'plate-1';
+    const nodeKey =
+      this.level.electricNodes[0]?.conditionKey ??
+      this.level.resonancePairs?.[0]?.poweredConditionKey ??
+      'node-1';
+    const vineKey = this.level.growthPoints[0]?.conditionKey ?? 'vine-1';
+
+    const resolvedPlate = plateOn ?? this.puzzleSystem.getCondition(plateKey);
+    const resolvedNode = nodeOn ?? this.puzzleSystem.getCondition(nodeKey);
+    const resolvedVine = vineGrown ?? this.puzzleSystem.getCondition(vineKey);
+
+    const pair = this.resonancePairs[0];
+    const powered = pair ? pair.relay.isRelayPowered() : false;
+
+    publishDevGameState({
+      scene: SCENE_KEYS.GAMEPLAY,
+      levelId: this.level.id,
+      isPaused: this.isPaused,
+      nextLevelId: this.nextLevelId,
+      activeCritter: active.id,
+      moss: {
+        x: Math.round(moss.x),
+        y: Math.round(moss.y),
+        state: moss.critterState,
+        facing: moss.facing,
+      },
+      zippy: {
+        x: Math.round(zippy.x),
+        y: Math.round(zippy.y),
+        state: zippy.critterState,
+        facing: zippy.facing,
+      },
+      puzzle: {
+        vineGrown: resolvedVine,
+        plateOn: resolvedPlate,
+        nodeOn: resolvedNode,
+        doorOpen: resolvedPlate && resolvedNode,
+        completed: this.puzzleSystem.isCompleted(),
+      },
+      resonance: pair
+        ? {
+            rootConnected: pair.root.isRootConnected(),
+            vineVisible: pair.connection.isVisible(),
+            energyTransmitting: pair.connection.isTransmitting(),
+            relayPowered: powered,
+            gateUnlocked: resolvedPlate && powered,
+            completed: this.puzzleSystem.isCompleted(),
+          }
+        : undefined,
+    });
   }
 
   private buildPuzzleConduits(groundTopY: number): void {
